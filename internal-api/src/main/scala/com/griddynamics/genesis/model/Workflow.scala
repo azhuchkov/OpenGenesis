@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.model
 
@@ -29,15 +29,17 @@ import java.sql.Timestamp
 //TODO make stepsCount and stepsFinished Option fields
 class Workflow(val envId: Int,
                val name: String,
+               val startedBy: String,
                var status: WorkflowStatus,
                var stepsCount: Int,
                var stepsFinished: Int,
                val variables: VariablesField,
-               var executionStarted: Option[Timestamp]) extends GenesisEntity {
-    def this() = this (0, "", Requested, 0, 0, Map[String, String](), None)
+               var executionStarted: Option[Timestamp],
+               var executionFinished: Option[Timestamp]) extends GenesisEntity {
+    def this() = this (0, "", "", Requested, 0, 0, Map[String, String](), None, None)
 
     def copy() = {
-        val w = new Workflow(envId, name, status, stepsCount, stepsFinished, variables, executionStarted)
+        val w = new Workflow(envId, name, startedBy, status, stepsCount, stepsFinished, variables, executionStarted, executionFinished)
         w.id = this.id
         w
     }

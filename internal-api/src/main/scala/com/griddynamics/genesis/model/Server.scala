@@ -17,9 +17,14 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @Project:     Genesis
- * @Description: Execution Workflow Engine
+ * Project:     Genesis
+ * Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.model
 
-class Server (var serverArrayId: GenesisEntity.Id, var instanceId: String, var address: String) extends GenesisEntity
+class Server (var serverArrayId: GenesisEntity.Id,
+              var instanceId: String,
+              var address: String,
+              var credentialsId: Option[GenesisEntity.Id]) extends GenesisEntity {
+  def this() = this(0, "","", Some(0))
+}

@@ -17,8 +17,8 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @Project:     Genesis
- * @Description: Execution Workflow Engine
+ * Project:     Genesis
+ * Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.service.impl
 
@@ -105,6 +105,6 @@ class DefaultAuthorityService extends AuthorityService {
     userAuthorities.deleteWhere(auth => auth.authority === authorityName)
     groups.foreach(group => groupAuthorities.insert(new Authority(group, authorityName)))
     usernames.foreach(user => userAuthorities.insert(new Authority(user, authorityName)))
-    new RequestResult(isSuccess = true)
+    Success(None)
   }
 }

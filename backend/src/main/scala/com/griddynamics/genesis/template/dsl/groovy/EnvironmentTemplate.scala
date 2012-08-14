@@ -17,20 +17,23 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.template.dsl.groovy
 
 import groovy.lang.{GroovyObjectSupport, Closure}
 import scala._
 import collection.mutable.ListBuffer
-import com.griddynamics.genesis.template.{DependentDataSource, DataSourceFactory, VarDataSource}
+import com.griddynamics.genesis.template._
 import java.lang.reflect.Method
 import java.lang.{Boolean, IllegalStateException}
 import com.griddynamics.genesis.util.ScalaUtils
-
-class EnvWorkflow(val name : String, val variables : List[VariableDetails], val stepsGenerator : Option[Closure[Unit]])
+import reflect.BeanProperty
+import scala.Some
+import com.griddynamics.genesis.repository.DatabagRepository
+import support.{ProjectDatabagSupport, SystemWideContextSupport}
+import org.codehaus.groovy.runtime.InvokerHelper
 
 class EnvironmentTemplate(val name : String,
                           val version : String,
@@ -40,121 +43,19 @@ class EnvironmentTemplate(val name : String,
                           val workflows : List[EnvWorkflow]) {
 }
 
-class VariableDetails(val name : String, val clazz : Class[_ <: AnyRef], val description : String,
-                      val validators : Seq[Closure[Boolean]], val isOptional: Boolean = false, val defaultValue: Option[Any],
-                      val valuesList: Option[(Map[String,Any] => Map[String,String])] = None, val dependsOn: Seq[String])
-
-class VariableBuilder(val name : String, dsObjSupport: Option[DSObjectSupport]) {
-    var description : String = _
-    var validators = new ListBuffer[Closure[Boolean]]
-    var clazz : Class[_ <: AnyRef] = classOf[String]
-    var defaultValue: Any = _
-    var isOptional: Boolean = false
-    var parents = new ListBuffer[String]
-    var dataSource: Option[String] = None
-    var useOneOf: Boolean = false
-    var oneOf: Closure[java.util.Map[String,String]] = _
-
-    def as(value : Class[_ <: AnyRef]) = {
-        this.clazz = value
-        this
-    }
-
-    def description(description : String) = {
-        description_=(description)
-        this
-    }
-
-    def validator(validator : Closure[Boolean]) = {
-        validators += validator
-        this
-    }
-  
-    def optional(v: Any) = {
-      isOptional = true
-      defaultValue = v
-      this
-    }
-
-    def dependsOn(varName: String) = {
-        if (useOneOf) {
-            throw new IllegalArgumentException("dependsOn cannot be used with oneOf")
-        }
-        parents += varName
-        this
-    }
-
-    def dependsOn(names: Array[String]) = {
-        if (useOneOf) {
-            throw new IllegalArgumentException("dependsOn cannot be used with oneOf")
-        }
-        parents ++= names
-        this
-    }
-
-    def dataSource(dsName: String) = {
-        if (useOneOf) {
-            throw new IllegalArgumentException("oneOf cannot be used with dataSource")
-        }
-        dataSource_=(Option(dsName))
-        this
-    }
-
-    def oneOf(values: Closure[java.util.Map[String,String]]) = {
-        useOneOf = true
-        oneOf_=(values)
-        this
-    }
-
-    def valuesList: Option[(Map[String, Any] => Map[String,String])] = {
-        if (useOneOf) {
-            import collection.JavaConversions._
-            dsObjSupport.foreach(oneOf.setDelegate(_))
-            val values = Option({ _: Any => oneOf.call().map(kv => (kv._1, kv._2)).toMap})
-            validators += new Closure[Boolean]() {
-                def doCall(args: Array[Any]): Boolean = {
-                    values.get.apply().asInstanceOf[Map[String,String]].exists(_._1.toString == args(0).toString)
-                }
-            }
-            values
-        } else {
-           dataSource.flatMap(ds => Option({params : Map[String, Any] => {
-               val p = parents.toList.map(params.get(_)).flatten
-               dsObjSupport.get.getData(ds, p)
-           }}))
-        }
-    }
-
-    def newVariable = new VariableDetails(name, clazz, description, validators, isOptional, Option(defaultValue), valuesList, parents.toList)
-}
-
-class VariableDeclaration(val dsObjSupport: Option[DSObjectSupport]) {
-    val builders = new ListBuffer[VariableBuilder]
-
-    def variable(name : String) = {
-        val builder = new VariableBuilder(name, dsObjSupport)
-        builders += builder
-        builder
-    }
-}
-
-class WorkflowDeclaration {
-    var variablesBlock : Option[Closure[Unit]] = None
-    var stepsBlock : Option[Closure[Unit]] = None
-
-    def variables(variables : Closure[Unit]) {
-        variablesBlock = Some(variables)
-    }
-
-    def steps(steps : Closure[Unit]) {
-        stepsBlock = Some(steps)
-    }
-}
-
 class NameVersionDelegate {
     var name : String = _
     var version : String = _
-    def workflow(name: String, details : Closure[Unit]) = this
+
+
+    var createWorkflowName : String = _
+    var destroyWorkflowName : String = _
+    val workflows = ListBuffer[EnvWorkflow]()
+
+    def workflow(name: String, details : Closure[Unit]) = {
+        workflows += new EnvWorkflow(name, List(), None)
+        this
+    }
 
     def name(value : String) : NameVersionDelegate = {
         if (name != null)
@@ -178,22 +79,26 @@ class NameVersionDelegate {
         case None => version
         case Some(s) => s
       }
-      new EnvironmentTemplate(templateName, templateVersion, extProject, "create", "destroy",
-          List(new EnvWorkflow("create", List(), None), new EnvWorkflow("destroy", List(), None)))
+      new EnvironmentTemplate(templateName, templateVersion, extProject, createWorkflowName, destroyWorkflowName,
+          workflows.toList)
     }
 
-    def createWorkflow(name : String) = this    
-    def destroyWorkflow(name : String)  = this
+    def createWorkflow(name : String): NameVersionDelegate = {
+        this.createWorkflowName = name
+        this
+    }
+
+    def destroyWorkflow(name : String): NameVersionDelegate = {
+        this.destroyWorkflowName = name
+        this
+    }
     def dataSources(ds : Closure[Unit]){}
 }
 
-class EnvTemplateBuilder(val projectId: Int, val dataSourceFactories : Seq[DataSourceFactory]) extends NameVersionDelegate {
+class EnvTemplateBuilder(val projectId: Int,
+                         val dataSourceFactories : Seq[DataSourceFactory],
+                         val databagRepository: DatabagRepository) extends NameVersionDelegate with SystemWideContextSupport with ProjectDatabagSupport {
 
-    var createWorkflow : String = _
-    var destroyWorkflow : String = _
-
-    val workflows = ListBuffer[EnvWorkflow]()
-    
     var dsObjSupport : Option[DSObjectSupport] = None
 
     override def workflow(name: String, details : Closure[Unit]) = {
@@ -202,11 +107,11 @@ class EnvTemplateBuilder(val projectId: Int, val dataSourceFactories : Seq[DataS
         val delegate = new WorkflowDeclaration
         details.setDelegate(delegate)
         details.call()
-
         val variableBuilders = delegate.variablesBlock match {
             case Some(block) => {
-                val variablesDelegate = new VariableDeclaration(dsObjSupport)
+                val variablesDelegate = new VariableDeclaration(dsObjSupport, dataSourceFactories, projectId )
                 block.setDelegate(variablesDelegate)
+                block.setResolveStrategy(Closure.DELEGATE_FIRST)
                 block.call()
                 variablesDelegate.builders
             } case None => Seq[VariableBuilder]()
@@ -218,24 +123,25 @@ class EnvTemplateBuilder(val projectId: Int, val dataSourceFactories : Seq[DataS
         this
     }
 
+
     override def createWorkflow(name : String) : EnvTemplateBuilder = {
-        if (createWorkflow != null) throw new IllegalStateException("create workflow name is already set")
-        this.createWorkflow = name
+        if (createWorkflowName != null) throw new IllegalStateException("create workflow name is already set")
+        this.createWorkflowName = name
         this
     }
 
     override def destroyWorkflow(name : String) : EnvTemplateBuilder = {
-        if (destroyWorkflow != null) throw new IllegalStateException("destroy workflow name is already set")
-        this.destroyWorkflow = name
+        if (destroyWorkflowName != null) throw new IllegalStateException("destroy workflow name is already set")
+        this.destroyWorkflowName = name
         this
     }
+
 
     override def dataSources(ds : Closure[Unit]) {
         val dsDelegate = new DataSourceDeclaration(projectId, dataSourceFactories)
         ds.setDelegate(dsDelegate)
         ds.call()
         val dsBuilders = dsDelegate.builders
-
         val map = (for (builder <- dsBuilders) yield builder.newDS).toMap
         dsObjSupport = Option(new DSObjectSupport(map))
     }
@@ -243,11 +149,11 @@ class EnvTemplateBuilder(val projectId: Int, val dataSourceFactories : Seq[DataS
     private def newTemplate = {
         if (name == null) throw new IllegalStateException("name is not set")
         if (version == null) throw new IllegalStateException("version is not set")
-        if (createWorkflow == null) throw new IllegalStateException("create workflow name is not set")
-        if (destroyWorkflow == null) throw new IllegalStateException("destroy workflow name is not set")
-        if (workflows.find(_.name == createWorkflow).isEmpty) throw new IllegalStateException("create workflow is not defined")
-        if (workflows.find(_.name == destroyWorkflow).isEmpty) throw new IllegalStateException("destroy workflow is not defined")
-        new EnvironmentTemplate(name, version, None, createWorkflow, destroyWorkflow, workflows.toList)
+        if (createWorkflowName == null) throw new IllegalStateException("create workflow name is not set")
+        if (destroyWorkflowName == null) throw new IllegalStateException("destroy workflow name is not set")
+        if (workflows.find(_.name == createWorkflowName).isEmpty) throw new IllegalStateException("create workflow is not defined")
+        if (workflows.find(_.name == destroyWorkflowName).isEmpty) throw new IllegalStateException("destroy workflow is not defined")
+        new EnvironmentTemplate(name, version, None, createWorkflowName, destroyWorkflowName, workflows.toList)
     }
   
     override def newTemplate(extName: Option[String], extVersion: Option[String], extProject: Option[String]) = {
@@ -261,11 +167,11 @@ class EnvTemplateBuilder(val projectId: Int, val dataSourceFactories : Seq[DataS
       }
       if (templateName == null) throw new IllegalStateException("name is not set")
       if (templateVersion == null) throw new IllegalStateException("version is not set")
-      if (createWorkflow == null) throw new IllegalStateException("create workflow name is not set")
-      if (destroyWorkflow == null) throw new IllegalStateException("destroy workflow name is not set")
-      if (workflows.find(_.name == createWorkflow).isEmpty) throw new IllegalStateException("create workflow is not defined")
-      if (workflows.find(_.name == destroyWorkflow).isEmpty) throw new IllegalStateException("destroy workflow is not defined")
-      new EnvironmentTemplate(templateName, templateVersion, extProject, createWorkflow, destroyWorkflow, workflows.toList)
+      if (createWorkflowName == null) throw new IllegalStateException("create workflow name is not set")
+      if (destroyWorkflowName == null) throw new IllegalStateException("destroy workflow name is not set")
+      if (workflows.find(_.name == createWorkflowName).isEmpty) throw new IllegalStateException("create workflow is not defined")
+      if (workflows.find(_.name == destroyWorkflowName).isEmpty) throw new IllegalStateException("destroy workflow is not defined")
+      new EnvironmentTemplate(templateName, templateVersion, extProject, createWorkflowName, destroyWorkflowName, workflows.toList)
     }
 }
 
@@ -279,63 +185,3 @@ class BlockDeclaration {
 }
 
 
-class DataSourceDeclaration(val projectId: Int, dsFactories: Seq[DataSourceFactory]) {
-    val builders = new ListBuffer[DataSourceBuilder]
-
-    def dataSource(mode : String) = dsFactories.find(mode == _.mode).map( factory => {
-        val builder = new DataSourceBuilder(projectId, factory)
-        builders += builder
-        builder
-    }).getOrElse(throw new IllegalArgumentException("No such variable datasource provider exists: " + mode))
-}
-
-class DataSourceBuilder(val projectId: Int, val factory : DataSourceFactory) {
-    var name : String = _
-    var conf : Map[String, Any] = _
-
-    def name(nm : String) = {
-        name_=(nm)
-        this
-    }
-
-    def config(map : java.util.Map[String, Any]) = {
-        this.conf = collection.JavaConversions.mapAsScalaMap(map).toMap
-        this
-    }
-
-    def newDS = (name, {val ds = factory.newDataSource; ds.config(conf + ("projectId" -> projectId)); ds})
-}
-
- class DSObjectSupport(val dsMap: Map[String, VarDataSource]) extends GroovyObjectSupport {
-     override def getProperty(name: String)  = {
-         dsMap.get(name) match {
-             case Some(src) => collection.JavaConversions.mapAsJavaMap(src.getData)
-             case _ => super.getProperty(name)
-         }
-     }
-
-     def getData(name: String, args: List[Any]): Map[String,String] = {
-         dsMap.get(name) match {
-             case Some(src) => args match {
-                 case Nil => src.getData
-                 case x :: Nil => {
-                     src.asInstanceOf[DependentDataSource].getData(x)
-                 }
-                 case head :: tail => {
-                     val params: Array[AnyRef] = args.map(v => ScalaUtils.toAnyRef(v)).toArray
-                     val find: Option[Method] = src.getClass.getDeclaredMethods.find(m => m.getName == "getData"
-                       && m.getParameterTypes.length == params.length
-                     )
-                     find match  {
-                         case Some(m) => {
-                             m.invoke(src, params:_*).asInstanceOf[Map[String,String]]
-                         }
-                         case _ => throw new IllegalStateException("Cannot find method getData for args %s".format(args))
-                     }
-                 }
-                 case _ => throw new IllegalStateException("Cannot find any suitable method at datasource %s".format(src))
-             }
-             case _ => throw new IllegalStateException("Can't get datasource for argument %s".format(name))
-         }
-     }
- }

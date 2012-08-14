@@ -17,16 +17,15 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @Project:     Genesis
- * @Description: Execution Workflow Engine
+ * Project:     Genesis
+ * Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.run
 
-import com.griddynamics.genesis.plugin.api.GenesisPlugin
-import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.{Configuration, Bean}
 import com.griddynamics.genesis.plugin._
 
-@GenesisPlugin(id="run-local", description = "Execute local shell script")
+@Configuration
 class RunLocalPluginContext {
 
   val strategies = List(new CmdExecutionStrategy, new PowerShellExecutions, new ShExecutionStrategy)

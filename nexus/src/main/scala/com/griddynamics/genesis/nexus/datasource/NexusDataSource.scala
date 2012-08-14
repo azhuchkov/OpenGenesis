@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 
 package com.griddynamics.genesis.nexus.datasource
@@ -83,11 +83,11 @@ class NexusDataSource(val credStore: CredentialsStoreService) extends VarDataSou
 
     }).flatten
 
-    def getData = getData(url).sortBy(FilenameUtils.getName(_)).map(v => (v, v.substring(v.lastIndexOf("/") + 1))).toMap
+    def getData = getData(url).sortBy(FilenameUtils.getName(_)).map(v => (v.substring(v.lastIndexOf("/") + 1), v)).toMap
 
     def config(map: Map[String, Any]) {
         val projId = map.get("projectId").map(_.asInstanceOf[Int])
-        credOpt = projId.flatMap(credStore.find(_, CredProvider, map(Credential).toString))
+        credOpt = projId.flatMap(credStore.find(_, CredProvider, map.get(Credential).getOrElse("").toString))
         url = new URL(map(Url).toString)
         wildcard = map.getOrElse(Filter, wildcard).toString
     }

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) 2010-2012 Grid Dynamics Consulting Services, Inc, All Rights Reserved
  *   http://www.griddynamics.com
  *
@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.service.impl
 
@@ -29,82 +29,82 @@ import collection.mutable.ListBuffer
 import service._
 import org.springframework.core.convert.ConversionService
 import java.lang.IllegalStateException
-import scala.Some
-import java.util.{Map => JMap}
 import com.griddynamics.genesis.template.dsl.groovy._
-import com.griddynamics.genesis.template.{DataSourceFactory, VersionedTemplate, TemplateRepository}
+import com.griddynamics.genesis.template._
 import com.griddynamics.genesis.workflow.Step
-import com.griddynamics.genesis.plugin.{GenesisStep, StepBuilder, StepBuilderFactory}
-import com.griddynamics.genesis.util.{ScalaUtils, Logging}
+import com.griddynamics.genesis.plugin.{StepBuilder, StepBuilderFactory}
+import com.griddynamics.genesis.util.{TryingUtil, ScalaUtils, Logging}
 import org.codehaus.groovy.runtime.{InvokerHelper, MethodClosure}
+import scala.Some
+import service.ValidationError
+import com.griddynamics.genesis.plugin.GenesisStep
+import com.griddynamics.genesis.repository.DatabagRepository
+import com.griddynamics.genesis.cache.Cache
+import groovy.util.Expando
+import net.sf.ehcache.{CacheManager, Element}
+import java.util.concurrent.TimeUnit
 
 class GroovyTemplateService(val templateRepository : TemplateRepository,
                             val stepBuilderFactories : Seq[StepBuilderFactory],
                             val conversionService : ConversionService,
-                            val dataSourceFactories : Seq[DataSourceFactory] = Seq()   )
-    extends service.TemplateService with Logging {
+                            val dataSourceFactories : Seq[DataSourceFactory] = Seq(),
+                            databagRepository: DatabagRepository,
+                            val cacheManager: CacheManager)
+    extends service.TemplateService with Logging with Cache {
 
-    val updateLock = new Object
+    val cache = addCacheIfAbsent("GroovyTemplateService")
 
-    var revisionId = ""
-    var sourcesMap = Map[VersionedTemplate, (String, String)]()
-    var templatesMap = Map[(String, String), EnvironmentTemplate]()
 
-    def findTemplate(projectId: Int, name: String, version: String) : Option[TemplateDefinition] =
-        updateTemplates(projectId).get(name, version).map(et =>
+    override def defaultTtl = TimeUnit.HOURS.toSeconds(24).toInt
+
+    def findTemplate(projectId: Int, name: String, version: String) = getTemplate(projectId, name, version)
+
+    def getTemplate(projectId: Int, name: String, version: String, eval: Boolean = true) : Option[TemplateDefinition] = {
+        val body = getTemplateBody(name, version, projectId)
+        body.flatMap(evaluateTemplate(projectId, _, None, None, None, listOnly = !eval).map(et =>
             new GroovyTemplateDefinition(et, conversionService, stepBuilderFactories)
-        )
+        ))
+    }
 
-    def listTemplates(projectId: Int) = {
+    override def descTemplate(projectId: Int, name: String, version: String) = {
+      for (
+        body <- getTemplateBody(name, version, projectId);
+        definition <- evaluateTemplate(projectId, body, None, None, None, listOnly = true)
+      ) yield {
+        new TemplateDescription(name, version, definition.createWorkflow, definition.destroyWorkflow, definition.workflows.map(_.name))
+      }
+    }
+
+
+  def getTemplateBody(name: String, version: String, projectId: Int): Option[String] = {
+    val ref = Option(cache.get(TmplCacheKey(name, version, projectId))).map(_.getObjectValue.asInstanceOf[VersionedTemplate])
+    val bodyOpt = ref match {
+      case Some(verTmpl) => templateRepository.getContent(verTmpl)
+      case None => templatesMap(projectId).get(name, version)
+    }
+    bodyOpt
+  }
+
+  def listTemplates(projectId: Int) = templatesMap(projectId).keys.toSeq
+
+    private def templatesMap(projectId: Int) = {
         val sources = templateRepository.listSources()
         (for ((version, body) <- sources) yield try {
             val template = evaluateTemplate(projectId, body, None, None, None, true)
-            template.map(t => (t.name, t.version))
-        } catch {
+
+            template.foreach(t => {
+              val key = TmplCacheKey(t.name, t.version, projectId)
+              val value = new VersionedTemplate(version.name)
+              cache.putIfAbsent(new Element(key, value))//todo (RB): we assume repo is not using vsc versions
+            })
+
+            template.map(t => ((t.name, t.version), body))
+       } catch {
             case t: Throwable => {
                 log.error(t, "Error in template name or version: %s", t)
                 None
             }
-        }).flatten.toSeq
-
-    }
-
-    //TODO: remove?
-    private def updateTemplates(projectId: Int) = updateLock.synchronized {
-        val sources = templateRepository.listSources()
-        val uRevisionId = TemplateRepository.revisionId(sources)
-
-        if (revisionId != uRevisionId) {
-            revisionId = uRevisionId
-
-            val uSourcesMap = mutable.Map[VersionedTemplate, (String, String)]()
-            val uTemplatesMap = mutable.Map[(String, String), EnvironmentTemplate]()
-
-            for ((version, body) <- sources) try {
-                val pair = sourcesMap.get(version)
-                val template : Option[EnvironmentTemplate] = pair match {
-                  case None => evaluateTemplate(projectId, body, None, None, None)
-                  case Some(p) => templatesMap.get(p) match {
-                      case a@Some(t) => a
-                      case _ => evaluateTemplate(projectId, body, None, None, None)
-                  }
-                }
-                template.foreach(template => {
-                    uSourcesMap(version) = (template.name, template.version)
-                    uTemplatesMap((template.name, template.version)) = template
-                })
-            }  catch {
-                // TODO: log exception stack trace?
-                case t: Throwable => {
-                    log.error(t, "Error processing template: %s", t)
-                    None
-                }
-            }
-            sourcesMap = uSourcesMap.toMap
-            templatesMap = uTemplatesMap.toMap
-        }
-
-        templatesMap
+        }).flatten.toMap        
     }
 
     def evaluateTemplate(projectId: Int, body : String, extName: Option[String], extVersion: Option[String],
@@ -121,7 +121,7 @@ class GroovyTemplateService(val templateRepository : TemplateRepository,
             case e: GroovyRuntimeException => throw new IllegalStateException("can't process template", e)
         }
 
-        val templateBuilder = if (listOnly) new NameVersionDelegate else new EnvTemplateBuilder(projectId, dataSourceFactories)
+        val templateBuilder = if (listOnly) new NameVersionDelegate else new EnvTemplateBuilder(projectId, dataSourceFactories, databagRepository)
         templateDecl.bodies.headOption.map {
             templateBody => {
                 templateBody.setDelegate(templateBuilder)
@@ -132,13 +132,8 @@ class GroovyTemplateService(val templateRepository : TemplateRepository,
     }
 
     def templateRawContent(projectId: Int, name: String, version: String) = {
-      updateTemplates(projectId)
-
-      val templVersionOption = sourcesMap.find { case (_, nameVersionTuple) =>
-        nameVersionTuple._1 == name && nameVersionTuple._2 == version
-      }.map(_._1)
-
-      templVersionOption.flatMap ( templateRepository.getContent(_))
+        val map = templatesMap(projectId)
+        map.get(name, version)
     }
 }
 
@@ -149,20 +144,6 @@ class StepBodiesCollector(variables: Map[String, AnyRef],
     val closures = (for (factory <- stepBuilderFactories) yield {
         (factory.stepName, (ListBuffer[Closure[Unit]](), factory))
     }).toMap
-
-
-    def $(evalExpression: String) = {
-     new ContextAccess {
-       def apply(context: scala.collection.Map[String, Any]) = {
-
-         val binding = new Binding()
-         context.foreach { case (key, value) => binding.setVariable(key, value) }
-
-         val shell = new GroovyShell(binding)
-         shell.evaluate(evalExpression)
-       }
-     }
-    }
 
     override def invokeMethod(name: String, args: AnyRef) = {
         val opt = closures.get(name)
@@ -200,12 +181,12 @@ object UninitializedStepDetails extends Step {
 
 class StepBuilderProxy(stepBuilder: StepBuilder) extends GroovyObjectSupport with StepBuilder {
     private val contextDependentProperties = mutable.Map[String, ContextAccess]()
-
     def getDetails = if(contextDependentProperties.isEmpty) stepBuilder.getDetails else UninitializedStepDetails
 
     def newStep(context: scala.collection.Map[String, AnyRef]): GenesisStep = {
         contextDependentProperties.foreach { case (propertyName, contextAccess) =>
-            ScalaUtils.setProperty(stepBuilder, propertyName, contextAccess(context))
+//            ScalaUtils.setProperty(stepBuilder, propertyName, contextAccess(context))
+          InvokerHelper.setProperty(stepBuilder, propertyName, contextAccess(context))
         }
         stepBuilder.id = this.id
         stepBuilder.phase = this.phase
@@ -217,16 +198,30 @@ class StepBuilderProxy(stepBuilder: StepBuilder) extends GroovyObjectSupport wit
 
     override def newStep = newStep(Map())
 
+
     override def setProperty(property: String, value: Any) {
         value match {
+          case value: Closure[_] =>
+            contextDependentProperties(property) = new ContextAccess {
+              def apply(v1: collection.Map[String, Any]) = {
+                import scala.collection.JavaConversions._
+                value.setDelegate(new Expando(v1))
+                value.call()
+              }
+            }
           case value: ContextAccess =>
-            contextDependentProperties(property) = value.asInstanceOf[ContextAccess]
+            contextDependentProperties(property) = value
+          case null => {
+            ScalaUtils.setProperty(stepBuilder, property, null)
+            TryingUtil.silently(ScalaUtils.setProperty(this, property, null))
+          }
           case _ => {
             ScalaUtils.setProperty(stepBuilder, property, value)
             if (ScalaUtils.hasProperty(this, property, ScalaUtils.getType(value))) {
               ScalaUtils.setProperty(this, property, value)
             }
           }
+
         }
     }
 
@@ -255,19 +250,26 @@ class GroovyWorkflowDefinition(val template: EnvironmentTemplate, val workflow :
     }
 
     override def partial(variables: Map[String, Any]): Seq[VariableDescription] = {
-        val dependents = for (variable <- variables) yield {
-            workflow.variables.find(p => p.dependsOn.find(_ == variable._1).isDefined).getOrElse(throw new RuntimeException("Unexpected variable %s".format(variable._1)))
+        val appliedVars = variables.keys.toSet
+
+        val dependents = workflow.variables.filter(p => p.dependsOn.toSet.subsetOf(appliedVars))
+
+        val resolvedVariables = variables.map { case (varName, varValue) =>
+          val variableDetails = workflow.variables.find(_.name == varName).getOrElse(throw new RuntimeException("No such variable: " + varName))
+          val convertedValue = convert(String.valueOf(varValue), variableDetails)
+          (varName, convertedValue)
         }
 
-        val typedVars = variables.map(v => (v._1, convert(String.valueOf(v._2), workflow.variables.find(_.name == v._1)
-            .getOrElse(throw new RuntimeException("No such variable: " + v._1)))))
-        dependents.map(v => new VariableDescription(v.name, v.description, v.isOptional, null, v.valuesList.map(lambda => {
-            lambda.apply(typedVars)
-        }).getOrElse(Map()), if (v.dependsOn.isEmpty) None else Some(v.dependsOn.toList))).toSeq
+        for(v <- dependents) yield {
+          val varPossibleValues: Map[String, String] = v.valuesList.map { lambda => lambda.apply(resolvedVariables) }.getOrElse(Map())
+          val dependsOn = if (v.dependsOn.isEmpty) None else Some(v.dependsOn.toList)
+
+          new VariableDescription(v.name, v.description, v.isOptional, v.defaultValue.map(_.toString).getOrElse(null), varPossibleValues, dependsOn)
+        }
     }
 
 
-    def validate(variables: Map[String, Any], envName: Option[String] = None) = {
+    def validate(variables: Map[String, Any], envId: Option[Int] = None, projectId: Option[Int] = None) = {
         val res = for (variable <- workflow.variables) yield {
             variables.get(variable.name) match {
                 case None => {
@@ -299,7 +301,7 @@ class GroovyWorkflowDefinition(val template: EnvironmentTemplate, val workflow :
       }
     }
 
-    def embody(variables: Map[String, String], envName: Option[String] = None) = {
+    def embody(variables: Map[String, String], envId: Option[Int] = None, projectId: Option[Int] = None) = {
         val typedVariables = (for (variable <- workflow.variables) yield {
           val res = variables.get(variable.name) match {
             case Some(value) =>
@@ -329,15 +331,20 @@ class GroovyWorkflowDefinition(val template: EnvironmentTemplate, val workflow :
 
     val variableDescriptions = {
         for (variable <- workflow.variables) yield {
-            new VariableDescription(variable.name, variable.description, variable.isOptional, variable.defaultValue match {
-              case None => null
-              case Some(v) => String.valueOf(v)
-            }, variable.valuesList.map(_.apply(Map())).getOrElse(Map()), if (variable.dependsOn.isEmpty) None else Some(variable.dependsOn.toList))
+            val default  = variable.defaultValue.map(String.valueOf(_)).getOrElse(null)
+            val dependsOn = if (variable.dependsOn.isEmpty) None else Some(variable.dependsOn.toList)
+
+            val valueList: Map[String, String] = variable.valuesList.map(_.apply(Map())).getOrElse(Map())
+
+            new VariableDescription(variable.name, variable.description, variable.isOptional, default, valueList, dependsOn)
         }
     }
 
     val name = workflow.name
 }
+
+private case class TmplCacheKey(name: String, version: String, projectId: Int)
+
 
 class GroovyTemplateDefinition(val envTemplate : EnvironmentTemplate,
                                conversionService : ConversionService,

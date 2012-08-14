@@ -5,18 +5,15 @@ import com.griddynamics.genesis.rest.GenesisRestController._
 import org.springframework.stereotype.Controller
 import org.springframework.web.bind.annotation._
 import com.griddynamics.genesis.service.impl.ProjectService
-import org.springframework.security.acls.model.{MutableAcl, NotFoundException, MutableAclService}
-import org.springframework.transaction.annotation.Transactional
-import com.griddynamics.genesis.spring.security.acls.ScalaObjectIdentityImpl
-import org.springframework.security.acls.domain.{GrantedAuthoritySid, PrincipalSid, BasePermission}
-import collection.mutable.Buffer
-import com.griddynamics.genesis.api.{ExtendedResult, RequestResult, Project}
+import com.griddynamics.genesis.api._
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.core.Authentication
-import java.security.Principal
 import com.griddynamics.genesis.users.GenesisRole
-import org.springframework.beans.factory.annotation.{Value, Autowired}
-import com.griddynamics.genesis.service.{ProjectAuthorityService, AuthorityService}
+import org.springframework.beans.factory.annotation.{Autowired, Value}
+import com.griddynamics.genesis.service.ProjectAuthorityService
+import com.griddynamics.genesis.validation.Validation
+import scala.Some
+import com.griddynamics.genesis.api.Project
 
 /**
  * Copyright (c) 2010-2012 Grid Dynamics Consulting Services, Inc, All Rights Reserved
@@ -37,23 +34,25 @@ import com.griddynamics.genesis.service.{ProjectAuthorityService, AuthorityServi
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @Project:     Genesis
- * @Description: Execution Workflow Engine
+ * Project:     Genesis
+ * Description:  Continuous Delivery Platform
  */
 @Controller
 @RequestMapping(value = Array("/rest/projects"))
-class ProjectsController(projectService: ProjectService, authorityService: ProjectAuthorityService) extends RestApiExceptionsHandler {
+class ProjectsController extends RestApiExceptionsHandler {
+
+
+  @Autowired var projectService: ProjectService = _
+  @Autowired var authorityService: ProjectAuthorityService = _
 
   @Value("${genesis.system.server.mode:frontend}")
   var mode = ""
-
-  lazy val backendMode = mode.matches("backend")  //todo(RB): temp workaround for 3 tier mode
 
   @RequestMapping(method = Array(RequestMethod.GET))
   @ResponseBody
   def listProjects(request: HttpServletRequest): Iterable[Project] = {
     import scala.collection.JavaConversions._
-    if (backendMode || request.isUserInRole(GenesisRole.SystemAdmin.toString)) {
+    if (request.isUserInRole(GenesisRole.SystemAdmin.toString)) {
       projectService.list
     } else {
       val auth = SecurityContextHolder.getContext.getAuthentication
@@ -90,8 +89,11 @@ class ProjectsController(projectService: ProjectService, authorityService: Proje
 
   @RequestMapping(value = Array("{projectId}"), method = Array(RequestMethod.DELETE))
   @ResponseBody
-  def deleteProject(@PathVariable("projectId") projectId: Int, request: HttpServletRequest, response: HttpServletResponse) {
-    projectService.get(projectId).foreach( projectService.delete(_) )
+  def deleteProject(@PathVariable("projectId") projectId: Int, request: HttpServletRequest, response: HttpServletResponse) = {
+    projectService.get(projectId) match {
+      case Some(project) => projectService.delete(project)
+      case _ => throw new ResourceNotFoundException("Project [id = %s] was not found".format(projectId))
+    }
   }
 
   private def extractProject(projectId: Option[Int], paramsMap: Map[String, Any]): Project = {
@@ -107,11 +109,26 @@ class ProjectsController(projectService: ProjectService, authorityService: Proje
   def updateProjectRole(@PathVariable("projectId") projectId: Int,
                         @PathVariable("roleName") roleName: String,
                         request: HttpServletRequest,
-                        response: HttpServletResponse): RequestResult = {
+                        response: HttpServletResponse): ExtendedResult[_] = {
     val paramsMap = GenesisRestController.extractParamsMap(request)
+
     val users = GenesisRestController.extractListValue("users", paramsMap)
     val groups = GenesisRestController.extractListValue("groups", paramsMap)
-    authorityService.updateProjectAuthority(projectId,  GenesisRole.withName(roleName), users, groups)
+
+    import Validation._
+    val invalidUsers = users.filterNot(_.matches(validADUserName))
+    val invalidGroups = groups.filterNot(_.matches(validADGroupName))
+
+    if(invalidGroups.nonEmpty || invalidUsers.nonEmpty) {
+      return Failure(
+        compoundServiceErrors = invalidUsers.map(ADUserNameErrorMessage.format(_)) ++ invalidGroups.map(ADGroupNameErrorMessage.format(_))
+      )
+    }
+
+    authorityService.updateProjectAuthority(projectId,
+      GenesisRole.withName(roleName),
+      users.distinct,
+      groups.distinct)
   }
 
   @RequestMapping(value = Array("{projectId}/roles/{roleName}"), method = Array(RequestMethod.GET))
@@ -129,7 +146,7 @@ class ProjectsController(projectService: ProjectService, authorityService: Proje
                        request: HttpServletRequest,
                        response: HttpServletResponse): List[String] = {
     import scala.collection.JavaConversions._
-    if (backendMode || request.isUserInRole(GenesisRole.SystemAdmin.toString)) {
+    if (request.isUserInRole(GenesisRole.SystemAdmin.toString)) {
       List(GenesisRole.ProjectAdmin.toString, GenesisRole.ProjectUser.toString)
     } else {
       val auth: Authentication = SecurityContextHolder.getContext.getAuthentication

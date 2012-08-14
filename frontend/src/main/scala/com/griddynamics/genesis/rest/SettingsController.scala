@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 
 package com.griddynamics.genesis.rest
@@ -26,38 +26,66 @@ package com.griddynamics.genesis.rest
 import org.springframework.web.bind.annotation._
 import org.springframework.stereotype.Controller
 import com.griddynamics.genesis.service.ConfigService
+import com.griddynamics.genesis.service.GenesisSystemProperties.{PREFIX, PLUGIN_PREFIX}
 import com.griddynamics.genesis.rest.GenesisRestController.{extractParamsMap, paramToOption}
 import javax.servlet.http.HttpServletRequest
-import com.griddynamics.genesis.api.RequestResult
+import com.griddynamics.genesis.api.{Failure, Success}
+import org.springframework.beans.factory.annotation.Autowired
 
 @Controller
 @RequestMapping(value = Array("/rest/settings"))
-class SettingsController(configService: ConfigService) extends RestApiExceptionsHandler {
+class SettingsController extends RestApiExceptionsHandler {
+
+    @Autowired var configService: ConfigService = _
+    private val VISIBLE_PREFIXES = Seq(PREFIX, PLUGIN_PREFIX)
+
+    private def isVisible(key: String) = VISIBLE_PREFIXES.map(key.startsWith(_)).reduce(_ || _)
 
     @RequestMapping(method = Array(RequestMethod.GET))
     @ResponseBody
-    def listSettings(@RequestParam(value = "prefix", required = false) prefix: String) = configService.listSettings(paramToOption(prefix))
+    def listSettings(@RequestParam(value = "prefix", required = false) prefix: String) =
+        configService.listSettings(paramToOption(prefix)).filter(p => isVisible(p.name))
 
     @RequestMapping(value = Array("{key:.+}"), method = Array(RequestMethod.PUT))
     @ResponseBody
     def update(@PathVariable("key") key: String, request: HttpServletRequest) = using { _ =>
-        configService.update(key, extractParamsMap(request)("value"))
+        validKey(key) { k =>
+          configService.update(k, extractParamsMap(request)("value"))
+        }
     }
 
     @RequestMapping(value = Array("{key:.+}"), method = Array(RequestMethod.DELETE))
     @ResponseBody
-    def delete(@PathVariable("key") key: String) = using ( _ => configService.delete(key) )
+    def delete(@PathVariable("key") key: String) = using { _ =>
+      validKey(key) { k=>
+        configService.delete(k)
+      }
+    }
 
     @RequestMapping(method = Array(RequestMethod.DELETE))
     @ResponseBody
-    def clear(@RequestParam(value = "prefix", required = false) prefix: String) = using{ _ => configService.clear(Option(prefix))}
+    def clear(@RequestParam(value = "prefix", required = false) prefix: String) = using{ _ =>
+        prefix match {
+            case p: String if (isVisible(p)) => configService.clear(Option(p))
+            case _ => throw new IllegalArgumentException("Only system or plugin properties could be deleted.")
+        }
+    }
 
     private def using (block : Any => Any) = {
         try {
             block()
-            RequestResult(isSuccess = true)
+            Success(None)
         } catch {
-            case e => RequestResult(isSuccess = false, compoundServiceErrors = Seq(e.getMessage))
+            case e: ResourceNotFoundException => Failure(compoundServiceErrors = Seq(e.msg), isNotFound = true)
+            case ex => Failure(compoundServiceErrors = Seq(ex.getMessage))
         }
+    }
+
+    private def validKey(key: String)(block: String => Any) {
+       if (!isVisible(key)) throw new ResourceNotFoundException("Key %s is not found".format(key))
+       configService.get(key) match {
+         case Some(v) => block(key)
+         case None => throw new ResourceNotFoundException("Key %s is not found".format(key))
+       }
     }
 }

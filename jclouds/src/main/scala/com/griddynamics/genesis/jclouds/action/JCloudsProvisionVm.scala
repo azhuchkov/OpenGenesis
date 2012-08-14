@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @Project:     Genesis
- * @Description: Execution Workflow Engine
+ * Project:     Genesis
+ * Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.jclouds.action
 
@@ -48,7 +48,6 @@ case class JCloudsProvisionVm(env: Environment,
       stepId = step.id,
       status = VmStatus.Provision,
       roleName = roleName,
-      hostNumber = 0,
       instanceId = instanceId,
       hardwareId = hardwareId,
       imageId = imageId,

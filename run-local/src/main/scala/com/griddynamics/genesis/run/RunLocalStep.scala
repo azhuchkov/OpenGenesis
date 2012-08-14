@@ -17,8 +17,8 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @Project:     Genesis
- * @Description: Execution Workflow Engine
+ * Project:     Genesis
+ * Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.run
 
@@ -31,7 +31,7 @@ import com.griddynamics.genesis.workflow.Step
 import com.griddynamics.genesis.util.Describer
 
 class RunLocalStepBuilderFactory extends StepBuilderFactory {
-  val stepName = "runLocal"
+  val stepName = "execLocal"
 
   def newStepBuilder = new StepBuilder {
     import scala.collection.JavaConversions._

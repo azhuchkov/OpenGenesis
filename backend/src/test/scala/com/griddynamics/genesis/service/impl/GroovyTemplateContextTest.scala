@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) 2010-2012 Grid Dynamics Consulting Services, Inc, All Rights Reserved
  * http://www.griddynamics.com
  *
@@ -17,8 +17,8 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @Project:     Genesis
- * @Description: Execution Workflow Engine
+ * Project:     Genesis
+ * Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.service.impl
 
@@ -27,7 +27,7 @@ import org.scalatest.mock.MockitoSugar
 import com.griddynamics.genesis.util.IoUtil
 import org.springframework.core.convert.support.ConversionServiceFactory
 import com.griddynamics.genesis.template.{ListVarDSFactory, VersionedTemplate, TemplateRepository}
-import org.junit.Test
+import org.junit.{Before, Test}
 import com.griddynamics.genesis.core.{RegularWorkflow, GenesisFlowCoordinator}
 import org.mockito.Mockito._
 import org.mockito.{Matchers, Mockito}
@@ -35,32 +35,39 @@ import com.griddynamics.genesis.model.{WorkflowStep, Workflow, Environment}
 import com.griddynamics.genesis.model.WorkflowStepStatus._
 import com.griddynamics.genesis.workflow.{Step, StepResult}
 import com.griddynamics.genesis.plugin.{GenesisStep, GenesisStepResult, StepCoordinatorFactory}
+import net.sf.ehcache.CacheManager
+import com.griddynamics.genesis.repository.DatabagRepository
 
 class GroovyTemplateContextTest extends AssertionsForJUnit with MockitoSugar {
   val templateRepository = mock[TemplateRepository]
 
   val storeService = {
     val storeService = mock[StoreService]
-    when(storeService.startWorkflow(Matchers.any())).thenReturn((mock[Environment], mock[Workflow], List()))
+    when(storeService.startWorkflow(Matchers.any(), Matchers.any())).thenReturn((mock[Environment], mock[Workflow], List()))
     when(storeService.insertWorkflowStep(Matchers.any())).thenReturn(
-      new WorkflowStep(workflowId = IdGen.generate, phase = "", status = Requested, details = "" )
+      new WorkflowStep(workflowId = IdGen.generate, phase = "", status = Requested, details = "", started = None, finished = None )
     )
     storeService
   }
 
+  @Before def setUp() {
+    CacheManager.getInstance().clearAll()
+  }
+
   val stepCoordinatorFactory = mock[StepCoordinatorFactory]
+  val databagRepository = mock[DatabagRepository]
   val body = IoUtil.streamAsString(classOf[GroovyTemplateServiceTest].getResourceAsStream("/groovy/ContextExample.genesis"))
   Mockito.when(templateRepository.listSources).thenReturn(Map(VersionedTemplate("1") -> body))
 
   val templateService = new GroovyTemplateService(templateRepository,
     List(new DoNothingStepBuilderFactory), ConversionServiceFactory.createDefaultConversionService(),
-    Seq(new ListVarDSFactory, new DependentListVarDSFactory))
+    Seq(new ListVarDSFactory, new DependentListVarDSFactory), databagRepository, CacheManager.getInstance())
 
   @Test def contextVariableAccess() {
     val stepBuilders = templateService.findTemplate(0, "TestEnv", "0.1").get.createWorkflow.embody(Map())
     stepBuilders.foreach { _.id = IdGen.generate }
 
-    val flowCoordinator = new GenesisFlowCoordinator("env", stepBuilders, storeService, stepCoordinatorFactory) with RegularWorkflow
+    val flowCoordinator = new GenesisFlowCoordinator(0, 0, stepBuilders, storeService, stepCoordinatorFactory) with RegularWorkflow
 
     flowCoordinator.onFlowStart()
 

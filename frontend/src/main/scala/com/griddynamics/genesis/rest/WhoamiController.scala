@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 
 package com.griddynamics.genesis.rest
@@ -28,9 +28,9 @@ import scala.Array
 import org.springframework.web.bind.annotation.{ResponseBody, RequestMethod, RequestMapping}
 import javax.servlet.http.HttpServletRequest
 import javax.servlet.ServletContext
-import com.griddynamics.genesis.GenesisFrontend
-import org.springframework.beans.factory.annotation.{Value, Autowired}
+import org.springframework.beans.factory.annotation.Autowired
 import com.griddynamics.genesis.users.GenesisRole
+import com.griddynamics.genesis.service.GenesisSystemProperties
 
 @Controller
 @RequestMapping(Array("/rest/whoami"))
@@ -38,14 +38,11 @@ class WhoamiController {
   @Autowired
   var servletContext: ServletContext = _
 
-  @Value("${genesis.system.security.groups:ROLE_GENESIS_ADMIN}")
-  var rjaGroups: String = _ //todo (RB) : temp rja fix  to enable UI admin facilities
-
   @RequestMapping(method = Array(RequestMethod.GET))
   @ResponseBody
   def whoami(request: HttpServletRequest): Map[String, Any] = Map(
     "user" -> GenesisRestController.getCurrentUser,
-    "logout_disabled" -> "false".equalsIgnoreCase(servletContext.getInitParameter(GenesisFrontend.logoutEnabledParamName)),
-    "administrator" -> (request.isUserInRole(GenesisRole.SystemAdmin.toString) || rjaGroups.split(",").exists(request.isUserInRole(_)))
+    "logout_disabled" -> "false".equalsIgnoreCase(servletContext.getInitParameter(GenesisSystemProperties.LOGOUT_ENABLED)),
+    "administrator" -> (request.isUserInRole(GenesisRole.SystemAdmin.toString))
   )
 }

@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.cache
 
@@ -28,7 +28,7 @@ import net.sf.ehcache.{Element, Ehcache, CacheManager}
 trait Cache {
   def cacheManager : CacheManager
 
-  def defaultTtl: Int = 30
+  def defaultTtl: Int = 30 //seconds
   def maxEntries : Int = 1000
   def eternal : Boolean = false
 

@@ -1,3 +1,26 @@
+/*
+ * Copyright (c) 2010-2012 Grid Dynamics Consulting Services, Inc, All Rights Reserved
+ *   http://www.griddynamics.com
+ *
+ *   This library is free software; you can redistribute it and/or modify it under the terms of
+ *   the GNU Lesser General Public License as published by the Free Software Foundation; either
+ *   version 2.1 of the License, or any later version.
+ *
+ *   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ *   AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ *   IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ *   DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE
+ *   FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ *   DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ *   SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ *   CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
+ */
+
 package com.griddynamics.genesis.rest
 
 import scala.Array
@@ -8,16 +31,21 @@ import GenesisRestController._
 import com.griddynamics.genesis.service.{ProjectAuthorityService, AuthorityService}
 import com.griddynamics.genesis.users.UserService
 import com.griddynamics.genesis.groups.GroupService
-import com.griddynamics.genesis.spring.ApplicationContextAware
-import com.griddynamics.genesis.api.RequestResult
+import com.griddynamics.genesis.api.{Failure, ExtendedResult, RequestResult}
+import org.springframework.beans.factory.annotation.Autowired
+import com.griddynamics.genesis.validation.Validation
 
 @Controller
 @RequestMapping(Array("/rest"))
-class RolesController(authorityService: AuthorityService, projectAuthorityService: ProjectAuthorityService)
-  extends RestApiExceptionsHandler with ApplicationContextAware {
+class RolesController extends RestApiExceptionsHandler {
 
-  private lazy val userService: Option[UserService] = Option(applicationContext.getBean(classOf[UserService]))
-  private lazy val groupService: Option[GroupService] = Option(applicationContext.getBean(classOf[GroupService]))
+  @Autowired var authorityService: AuthorityService = _
+  @Autowired var  projectAuthorityService: ProjectAuthorityService= _
+
+  @Autowired(required = false) var userServiceBean: UserService = _
+  @Autowired(required = false) var groupServiceBean: GroupService = _
+  private lazy val userService: Option[UserService] = Option(userServiceBean)
+  private lazy val groupService: Option[GroupService] = Option(groupServiceBean)
 
   @RequestMapping(value = Array("roles"), method = Array(RequestMethod.GET))
   @ResponseBody
@@ -60,16 +88,28 @@ class RolesController(authorityService: AuthorityService, projectAuthorityServic
 
   @RequestMapping(value = Array("roles/{roleName}"), method = Array(RequestMethod.PUT))
   @ResponseBody
-  def updateRole(@PathVariable("roleName") roleName: String, request: HttpServletRequest): RequestResult = {
+  def updateRole(@PathVariable("roleName") roleName: String, request: HttpServletRequest): ExtendedResult[Any] = {
     if(!authorityService.listAuthorities.contains(roleName)) {
       throw new ResourceNotFoundException("Role [name = " + roleName + "] was not found")
     }
     val grantsMap = extractParamsMap(request)
+
     val groups = extractListValue("groups", grantsMap)
     val users = extractListValue("users", grantsMap)
+
+    import Validation._
+    val invalidUsers = users.filterNot(_.matches(validADUserName))
+    val invalidGroups = groups.filterNot(_.matches(validADGroupName))
+
+    if(invalidGroups.nonEmpty || invalidUsers.nonEmpty) {
+      return Failure(
+        compoundServiceErrors = invalidUsers.map(ADUserNameErrorMessage.format(_)) ++ invalidGroups.map(ADGroupNameErrorMessage.format(_))
+      )
+    }
+
     validUsers(users) {
       validGroups (groups) {
-        authorityService.updateAuthority(roleName, groups, users)
+        authorityService.updateAuthority(roleName, groups.distinct, users.distinct)
       }
     }
   }
@@ -82,7 +122,7 @@ class RolesController(authorityService: AuthorityService, projectAuthorityServic
     }
     block
   }
-  private def validUsers[A](usernames: Seq[String])(block: => A): A = {
+  private def validUsers[A](usernames: Seq[String])(block: => ExtendedResult[_]): ExtendedResult[_] = {
     userService.map { service =>
       if (!service.doUsersExist(usernames)) {
         throw new ResourceNotFoundException("List of users contains unknown usernames")
@@ -99,7 +139,7 @@ class RolesController(authorityService: AuthorityService, projectAuthorityServic
     }
     block
   }
-  private def validGroups[A](groupNames: Seq[String])(block: => A): A = {
+  private def validGroups[A](groupNames: Seq[String])(block: => ExtendedResult[_]): ExtendedResult[_] = {
     groupService.map { service =>
       if(!service.doGroupsExist(groupNames)) {
         throw new ResourceNotFoundException("List of groups contains unknown  groups")
@@ -108,3 +148,4 @@ class RolesController(authorityService: AuthorityService, projectAuthorityServic
     block
   }
 }
+

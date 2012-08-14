@@ -17,25 +17,37 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @Project:     Genesis
- * @Description: Execution Workflow Engine
+ * Project:     Genesis
+ * Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.jclouds.executors
 
 import com.griddynamics.genesis.service.{ComputeService, SshService, StoreService}
-import com.griddynamics.genesis.actions.provision.CheckSshPortAction
 import com.griddynamics.executors.provision.CommonSshPortChecker
+import com.griddynamics.genesis.model.VmStatus
 import com.griddynamics.genesis.workflow.{AsyncTimeoutAwareActionExecutor, Signal}
+import com.griddynamics.genesis.service.impl.NoCredentialsFoundException
+import com.griddynamics.genesis.actions.provision.{NoCredentialsFound, CheckSshPortAction}
 
 class SshPortChecker(val action: CheckSshPortAction,
                      val computeService: ComputeService,
                      sshService: SshService,
                      val storeService: StoreService,
                      val timeoutMillis: Long = 180 * 1000) extends AsyncTimeoutAwareActionExecutor with CommonSshPortChecker {
-  lazy val sshClient = sshService.sshClient(action.env, action.vm)
+  def sshClient = sshService.sshClient(action.env, action.vm)
 
-  override def cleanUp(signal: Signal) {
-    if (sshClient != null)
-      sshClient.disconnect()
+  override def getResult() = {
+    try {
+      super.getResult()
+    } catch {
+      case e: NoCredentialsFoundException => {
+        log.debug("Ssh port check was failed: %s", e.getMessage)
+        action.vm.status = VmStatus.Failed
+        storeService.updateServer(action.vm)
+        Some(NoCredentialsFound(action, action.vm))
+      }
+    }
   }
+
+   def cleanUp(signal: Signal) {}
 }

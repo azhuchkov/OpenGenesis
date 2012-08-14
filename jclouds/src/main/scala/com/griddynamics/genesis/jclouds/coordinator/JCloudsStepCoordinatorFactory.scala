@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @Project:     Genesis
- * @Description: Execution Workflow Engine
+ * Project:     Genesis
+ * Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.jclouds.coordinators
 
@@ -26,15 +26,16 @@ import com.griddynamics.genesis.plugin.{StepExecutionContext, PartialStepCoordin
 import com.griddynamics.genesis.jclouds.step.{DestroyEnv, DestroyVm, ProvisionVm, JCloudsStep}
 import com.griddynamics.genesis.workflow.Step
 import com.griddynamics.genesis.jclouds.JCloudsProvisionContext
+import com.griddynamics.genesis.service.{CredentialsStoreService, CredentialService}
 
-class JCloudsStepCoordinatorFactory(pluginContext: () => JCloudsProvisionContext) extends PartialStepCoordinatorFactory {
+class JCloudsStepCoordinatorFactory(credStore: CredentialsStoreService, credService: CredentialService, pluginContext: () => JCloudsProvisionContext) extends PartialStepCoordinatorFactory {
   def isDefinedAt(step: Step) = step.isInstanceOf[JCloudsStep]
 
   def apply(step: Step, context: StepExecutionContext) = {
     val currentContext = context.pluginContexts.getOrElseUpdate("jclouds", pluginContext()).asInstanceOf[JCloudsProvisionContext]
 
     step match {
-      case s: ProvisionVm => new ProvisionVmsStepCoordinator(s, context, currentContext)
+      case s: ProvisionVm => new ProvisionVmsStepCoordinator(s, context, currentContext, credStore, credService)
       case s: DestroyEnv => {
         new DestroyEnvStepCoordinator(s, context, currentContext)
       }

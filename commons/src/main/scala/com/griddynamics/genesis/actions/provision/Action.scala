@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.actions.provision
 
@@ -54,7 +54,14 @@ case class ProvisionCompleted(action: SpecificProvisionVmAction,
                               vm: VirtualMachine) extends ProvisionResult
 
 case class ProvisionFailed(action: SpecificProvisionVmAction,
-                           vm: Option[VirtualMachine]) extends ProvisionResult with ActionFailed
+                           vm: Option[VirtualMachine],
+                           timedOut: Boolean) extends ProvisionResult with ActionFailed {
+  override def desc = if (timedOut) {
+    "Provisioning timed out"
+  } else {
+    "Failed to complete provisioning"
+  }
+}
 
 
 case class PublicIpCheckCompleted(action: CheckPublicIpAction) extends ProvisionResult
@@ -64,6 +71,8 @@ case class PublicIpCheckFailed(action: CheckPublicIpAction, vm: VirtualMachine) 
 case class SshCheckCompleted(action: CheckSshPortAction, vm: VirtualMachine) extends ProvisionResult
 
 case class SshCheckFailed(action: CheckSshPortAction, vm: VirtualMachine) extends ProvisionResult with ActionFailed
+
+case class NoCredentialsFound(action: CheckSshPortAction, vm: VirtualMachine) extends ProvisionResult with ActionFailed
 
 case class VmDestroyed(action: DestroyVmAction, vm: VirtualMachine) extends ProvisionResult
 

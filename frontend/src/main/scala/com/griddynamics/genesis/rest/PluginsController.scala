@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @Project:     Genesis
- * @Description: Execution Workflow Engine
+ * Project:     Genesis
+ * Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.rest
 
@@ -27,10 +27,12 @@ import org.springframework.web.bind.annotation._
 import javax.servlet.http.HttpServletRequest
 import com.griddynamics.genesis.api.{PluginDetails, Plugin}
 import com.griddynamics.genesis.plugin.PluginRepository
+import org.springframework.beans.factory.annotation.Autowired
 
 @Controller
 @RequestMapping(value = Array("/rest/plugins"))
-class PluginsController(repository: PluginRepository) extends RestApiExceptionsHandler {
+class PluginsController extends RestApiExceptionsHandler {
+  @Autowired var repository: PluginRepository = _
 
   @RequestMapping(method = Array(RequestMethod.GET))
   @ResponseBody

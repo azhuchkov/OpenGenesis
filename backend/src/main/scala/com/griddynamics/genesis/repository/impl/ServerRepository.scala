@@ -17,26 +17,25 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @Project:     Genesis
- * @Description: Execution Workflow Engine
+ * Project:     Genesis
+ * Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.repository.impl
 
 import com.griddynamics.genesis.{model, api}
 import com.griddynamics.genesis.repository
 import com.griddynamics.genesis.repository.AbstractGenericRepository
-import model.GenesisSchema
+import model.{GenesisSchema => GS}
 import org.squeryl.PrimitiveTypeMode._
-import org.squeryl._
 import org.springframework.transaction.annotation.Transactional
 
 
-class ServerRepository extends AbstractGenericRepository[model.Server, api.Server](GenesisSchema.servers) with repository.ServerRepository {
+class ServerRepository extends AbstractGenericRepository[model.Server, api.Server](GS.servers) with repository.ServerRepository {
 
-  implicit def convert(entity: model.Server) = new api.Server(fromModelId(entity.id), entity.serverArrayId, entity.instanceId, entity.address)
+  implicit def convert(entity: model.Server) = new api.Server(fromModelId(entity.id), entity.serverArrayId, entity.instanceId, entity.address, entity.credentialsId)
 
   implicit def convert(dto: api.Server) = {
-    val entity = new model.Server(dto.arrayId, dto.instanceId, dto.address)
+    val entity = new model.Server(dto.arrayId, dto.instanceId, dto.address, dto.credentialsId)
     entity.id = toModelId(dto.id)
     entity
   }
@@ -49,6 +48,10 @@ class ServerRepository extends AbstractGenericRepository[model.Server, api.Serve
 
   def deleteServer (arrayId: Int, serverId: Int ): Int = {
     table.deleteWhere(item => (arrayId === item.serverArrayId) and (serverId === item.id) )
+  }
+
+  def get(arrayId: Int, serverId: Int): Option[api.Server] = {
+    from(table)(item => where(item.id === serverId and item.serverArrayId === arrayId) select(item)).headOption.map(convert(_))
   }
 
   def findByInstanceId(arrayId: Int, instanceId: String):Option[api.Server] = from(table)(

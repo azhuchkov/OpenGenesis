@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.build
 
@@ -70,11 +70,11 @@ class BuildStepCoordinator(val step : Step, context: StepExecutionContext, plugi
 
     def getStepResult() = {
         new GenesisStepResult(isStepFailed = stepFailed, step = context.step,
-            envUpdate = context.envUpdate(), vmsUpdate = context.vmsUpdate())
+            envUpdate = context.envUpdate(), serversUpdate = context.serversUpdate())
     }
 }
 
-class BuildActionExecutor(val action : BuildAction, provider : BuildProvider) extends SimpleAsyncActionExecutor with Logging{
+class BuildActionExecutor(val action : BuildAction, provider : BuildProvider) extends SimpleAsyncActionExecutor with Logging {
   def startAsync() {
         log.debug("Starting build")
         provider.build(action.step.values)

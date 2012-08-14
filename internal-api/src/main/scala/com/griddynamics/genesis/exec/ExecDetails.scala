@@ -17,15 +17,15 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.exec
 
 import com.griddynamics.genesis.util.shell.Path
-import com.griddynamics.genesis.model.{Environment, VirtualMachine}
+import com.griddynamics.genesis.model.{EnvResource, Environment}
 
-case class ExecDetails(env: Environment, vm: VirtualMachine,
+case class ExecDetails(env: Environment, server: EnvResource,
                        execPath: Path, outputDir: Path,
                        workingDir: Path = ".", logFiles: Seq[Path] = Seq()) {
     def pidFile = outputDir / "exec.pid"

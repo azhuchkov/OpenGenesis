@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.rest
 
@@ -34,10 +34,15 @@ import org.springframework.beans.factory.annotation.{Qualifier, Autowired}
 import collection.JavaConversions
 import com.griddynamics.genesis.service.{ConversionException, TemplateService}
 import com.griddynamics.genesis.api.{Failure, GenesisService}
+import com.griddynamics.genesis.util.Logging
 
 @Controller
 @RequestMapping(Array("/rest"))
-class GenesisRestController(genesisService: GenesisService, templateService: TemplateService) extends RestApiExceptionsHandler {
+class GenesisRestController extends RestApiExceptionsHandler with Logging {
+
+    @Autowired
+    var genesisService: GenesisService = _
+    @Autowired var templateService: TemplateService = _
 
     @Autowired
     @Qualifier("buildInfo")
@@ -52,7 +57,7 @@ class GenesisRestController(genesisService: GenesisService, templateService: Tem
     def listTemplates(@PathVariable  projectId: Int,
                       @RequestParam(required = false) project: String, @RequestParam(required = false) tag: String) =
       paramToOption(project) match {
-        case _ => genesisService.listTemplates(projectId)
+        case _ => genesisService.listTemplates(projectId).map(template =>  Map("name" -> template.name, "version" -> template.version))
     }
 
     @RequestMapping(value = Array("projects/{projectId}/templates/{templateName}/v{templateVersion:.+}"), method = Array(RequestMethod.GET))
@@ -62,12 +67,17 @@ class GenesisRestController(genesisService: GenesisService, templateService: Tem
                     @PathVariable("templateVersion") templateVersion: String,
                     @RequestParam(defaultValue = "desc") format: String
                      ) = {
-      val result = format match {
-        case "src" => {
-          val contentOpt = templateService.templateRawContent(projectId, templateName, templateVersion)
-          contentOpt.map { src => Map("name" -> templateName, "version" -> templateVersion, "content" -> src) }
-        }
-        case "desc" => genesisService.getTemplate(projectId, templateName, templateVersion)
+      val result = try {
+          format match {
+              case "src" => val contentOpt = templateService.templateRawContent(projectId, templateName, templateVersion)
+                  contentOpt.map { src => Map("name" -> templateName, "version" -> templateVersion, "content" -> src)}
+              case "desc" => genesisService.getTemplate(projectId, templateName, templateVersion)
+
+          }
+      } catch {
+          case e =>
+              log.error(e, "Failed to get template %s version %s", templateName, templateVersion)
+              Option(Failure(compoundServiceErrors = List(e.getMessage), stackTrace = Option(e.getStackTraceString)))
       }
       result.getOrElse(throw new ResourceNotFoundException("Template not found"))
     }

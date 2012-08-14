@@ -17,8 +17,8 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @Project:     Genesis
- * @Description: Execution Workflow Engine
+ * Project:     Genesis
+ * Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.service.impl
 
@@ -32,20 +32,7 @@ import com.griddynamics.genesis.validation.Validation._
 import org.springframework.transaction.annotation.Transactional
 import com.griddynamics.genesis.repository.ServerRepository
 import java.net.UnknownHostException
-
-trait ServersService {
-  def update(array: ServerArray): ExtendedResult[ServerArray]
-  def create(array: ServerArray): ExtendedResult[ServerArray]
-  def deleteServerArray(projectId: Int, id: Int): ExtendedResult[Option[_]]
-  def list(projectId: Int): Seq[api.ServerArray]
-  def get(projectId: Int, id: Int): Option[api.ServerArray]
-
-  def create(server: Server): ExtendedResult[Server]
-  def deleteServer(arrayId: Int, serverId: Int): ExtendedResult[Option[_]]
-  def getServers(arrayId: Int): Seq[Server]
-
-
-}
+import com.griddynamics.genesis.service.ServersService
 
 class ServersServiceImpl(repository: ServerArrayRepository, serverRepo: ServerRepository) extends ServersService with Validation[api.ServerArray] {
 
@@ -86,8 +73,17 @@ class ServersServiceImpl(repository: ServerArrayRepository, serverRepo: ServerRe
   @Transactional
   def getServers(arrayId: Int) = serverRepo.listServers(arrayId)
 
+  @Transactional(readOnly = true)
+  def findArrayByName(projectId: Int, name: String): Option[api.ServerArray] = {
+    repository.findByName(name, projectId)
+  }
+
+  @Transactional(readOnly = true)
+  def getServer(arrayId: Int, serverId: Int): Option[Server] = serverRepo.get(arrayId, serverId)
+
   private[this] def validateServer(server: Server): ExtendedResult[Server] = {
     mustSatisfyLengthConstraints(server, server.instanceId, "instanceId")(1, 128) ++
+    mustSatisfyLengthConstraints(server, server.address, "address")(1, 128) ++
     must(server, "Server with instanceId '%s' already exists".format(server.instanceId)) { server =>
       serverRepo.findByInstanceId(server.arrayId, server.instanceId).isEmpty
     } ++
@@ -104,7 +100,7 @@ class ServersServiceImpl(repository: ServerArrayRepository, serverRepo: ServerRe
   protected def validateUpdate(c: ServerArray) =
     mustSatisfyLengthConstraints(c, c.name, "name")(1, 128) ++
     mustSatisfyLengthConstraints(c, c.description.getOrElse(""), "description")(0, 128) ++
-    mustExist(c){ it => repository.get(it.id.get, it.projectId) } ++
+    mustExist(c){ it => repository.get(it.projectId, it.id.get) } ++
     must(c, "Server array with name '" + c.name + "' already exists") {
       array => repository.findByName(array.name, array.projectId).forall { _.id == array.id}
     }

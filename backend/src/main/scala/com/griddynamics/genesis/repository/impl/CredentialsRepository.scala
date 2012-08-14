@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 
 package com.griddynamics.genesis.repository.impl
@@ -49,6 +49,13 @@ class CredentialsRepository extends AbstractGenericRepository[model.Credentials,
     item => where((item.projectId === projectId) and (cloudProvider === item.cloudProvider) and (Option(fingerPrint) === item.fingerPrint) )
       select (item)
   ).headOption.map(convert(_))
+
+  @Transactional(readOnly = true)
+  def find(projectId: Int, cloudProvider: String) = from(table) (
+    item => where((item.projectId === projectId) and (cloudProvider === item.cloudProvider) ) select (item)
+  ).toList.map(convert(_))
+
+
 
   @Transactional(readOnly = true)
   def list(projectId: Int): Iterable[api.Credentials] = from(table) (

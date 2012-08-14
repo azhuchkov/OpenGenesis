@@ -1,0 +1,47 @@
+package groovy
+template {
+    name("Projects")
+    version("0.1")
+    createWorkflow("create")
+    destroyWorkflow("destroy")
+
+    dataSources {
+        staticList("ds2"){
+            values = [$project.databag["foo"].key1]
+        }
+
+        databags("projectDatabags") {
+            tags = ["foo"]
+        }
+
+        databags("systemDatabags") {
+            tags = ["bar"]
+            source = "system"
+        }
+    }
+
+    workflow("create") {
+        variables {
+            variable("projectKey").optional(defaultValue = $project.databag["foo"].key2)
+            variable("projectList").dataSource("ds2").optional()
+            variable("projectdb").oneOf({projectDatabags}).optional(defaultValue = "foo")
+            variable("sysdb").oneOf({systemDatabags}).optional(defautValue = "bar")
+        }
+
+        steps {
+            teststep {
+                phase = "phase1"
+                text = $project.databag["foo"].key3
+            }
+        }
+    }
+
+    workflow("destroy") {
+        steps {
+            teststep {
+                phase = "undeply"
+                text = "destroy"
+            }
+        }
+    }
+}

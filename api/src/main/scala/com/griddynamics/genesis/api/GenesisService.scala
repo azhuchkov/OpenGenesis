@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.api
 
@@ -27,28 +27,36 @@ trait GenesisService {
 
     def getTemplate(projectId: Int, templateName: String, templateVersion: String) : Option[Template]
 
-    def getLogs(envName: String, stepId: Int) : Seq[String]
+    def getLogs(envId: Int, stepId: Int) : Seq[String]
+
+    def getLogs(envId: Int, actionUUID: String): Seq[String]
 
     def listEnvs (projectId: Int) : Seq[Environment]
+
+    def listEnvs (projectId: Int, statuses: Seq[String]) : Seq[Environment]
 
     def listEnvs(projectId: Int, start : Int, limit : Int) : Seq[Environment]
 
     def countEnvs(projectId: Int) : Int
 
-    def describeEnv(envName : String) : Option[EnvironmentDetails]
+    def describeEnv(envId : Int, projectId: Int) : Option[EnvironmentDetails]
+
+    def workflowHistory(envId: Int, projectId: Int, pageOffset: Int, pageLength: Int) : Option[WorkflowHistory]
 
     def listTemplates(projectId: Int) : Seq[Template]
 
     def createEnv(projectId: Int, envName : String, creator : String, templateName : String,
                   templateVersion : String, variables : Map[String, String]) : RequestResult
 
-    def destroyEnv(envName : String, variables : Map[String, String]) : RequestResult
+    def destroyEnv(envId : Int, projectId: Int, variables : Map[String, String], startedBy: String) : RequestResult
 
-    def requestWorkflow(envName : String, workflowName : String, variables : Map[String, String]) : RequestResult
+    def requestWorkflow(envId : Int, projectId: Int, workflowName : String, variables : Map[String, String], startedBy: String) : RequestResult
 
-    def cancelWorkflow(envName : String)
+    def resetEnvStatus(envId: Int, projectId: Int) : RequestResult
 
-    def isEnvExists(envName: String, projectId: Int): Boolean
+    def cancelWorkflow(envId : Int, projectId: Int)
+
+    def isEnvExists(envId: Int, projectId: Int): Boolean
 
     def getStepLog(stepId: Int): Seq[ActionTracking]
 }

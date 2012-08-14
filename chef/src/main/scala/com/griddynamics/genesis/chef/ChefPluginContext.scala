@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.chef
 
@@ -39,8 +39,11 @@ import org.springframework.beans.factory.annotation.Autowired
 import javax.annotation.PostConstruct
 import java.util.concurrent.TimeUnit
 import com.griddynamics.genesis.crypto.BasicCrypto
+import com.griddynamics.genesis.actions.json.PreprocessingJsonAction
+import com.griddynamics.genesis.executors.json.PreprocessJsonActionExecutor
 
 trait ChefPluginContext {
+    def preprocessJsonAction(action: PreprocessingJsonAction): PreprocessJsonActionExecutor
 
     def chefNodeInitializer(a: action.InitChefNode): ChefNodeInitializer
 
@@ -64,8 +67,6 @@ private object Plugin {
   val ValidatorIdentity = "genesis.plugin.chef.validator.identity"
   val ValidatorCredential = "genesis.plugin.chef.validator.credential"
   val Endpoint = "genesis.plugin.chef.endpoint"
-
-  val ChefInstallScript = "genesis.plugin.chef.install.sh"
 }
 
 @Configuration
@@ -132,11 +133,9 @@ class ChefPluginConfig(@transient config: Map[String, String]) extends Serializa
   val chefValidatorIdentity = config(Plugin.ValidatorIdentity)
   val chefValidatorCredentialResource = config(Plugin.ValidatorCredential)
 
-  val chefInstallShResource = config(Plugin.ChefInstallScript)
-
   @transient lazy val chefCredential = InputUtil.locationAsString(chefCredentialResource)
   @transient lazy val chefValidatorCredential = InputUtil.locationAsString(chefValidatorCredentialResource)
-  @transient lazy val chefResources = new ChefResourcesImpl(chefInstallShResource)
+  @transient lazy val chefResources = new ChefResourcesImpl("classpath:shell/chef-install.sh")
 }
 
 
@@ -161,6 +160,8 @@ class ChefExecutionContextImpl(sshService: SshService,
   def chefDatabagCreator(a: action.CreateChefDatabag) = new ChefDatabagCreator(a, chefService)
 
   def chefEnvDestructor(a: action.DestroyChefEnv) = new ChefEnvDestructor(a, chefService)
+
+  def preprocessJsonAction(action: PreprocessingJsonAction) = new PreprocessJsonActionExecutor(action, action.templatesUrl.getOrElse(""))
 }
 
 object ChefPluginContextImpl {

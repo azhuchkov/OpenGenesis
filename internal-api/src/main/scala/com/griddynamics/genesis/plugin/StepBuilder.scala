@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.plugin
 
@@ -39,7 +39,6 @@ trait StepBuilder {
     @BeanProperty var ignoreFail: Boolean = false
     @BeanProperty var retryCount: Int = 0
     @BeanProperty var exportTo: JMap[String, String] = Collections.emptyMap()
-
     var id: Int = 0
 
     def newStep = new GenesisStep(id, phase, JC.asScalaBuffer(precedingPhases).toSet, ignoreFail,

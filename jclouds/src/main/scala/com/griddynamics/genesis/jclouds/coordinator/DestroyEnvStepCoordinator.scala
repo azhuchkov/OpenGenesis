@@ -19,8 +19,8 @@ package com.griddynamics.genesis.jclouds.coordinators
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @Project:     Genesis
- * @Description: Execution Workflow Engine
+ * Project:     Genesis
+ * Description:  Continuous Delivery Platform
  */
 
 import com.griddynamics.genesis.workflow.{Action, ActionResult, Signal, ActionOrientedStepCoordinator}
@@ -29,6 +29,7 @@ import com.griddynamics.genesis.workflow.action.{ExecutorInterrupt, ExecutorThro
 import com.griddynamics.genesis.jclouds.step.{DestroyEnv => DestroyEnvStep}
 import com.griddynamics.genesis.actions.provision.{VmDestroyed, DestroyVmAction}
 import com.griddynamics.genesis.jclouds.JCloudsProvisionContext
+import com.griddynamics.genesis.model.{VmStatus, VirtualMachine}
 
 class DestroyEnvStepCoordinator(val step: DestroyEnvStep,
                                 context: StepExecutionContext,
@@ -46,13 +47,13 @@ class DestroyEnvStepCoordinator(val step: DestroyEnvStep,
     GenesisStepResult(context.step,
       isStepFailed = stepFailed,
       envUpdate = context.envUpdate(),
-      vmsUpdate = context.vmsUpdate())
+      serversUpdate = context.serversUpdate())
   }
 
   def onActionFinish(result: ActionResult) = {
     result match {
       case VmDestroyed(_, vm) => {
-        context.updateVm(vm)
+        context.updateServer(vm)
         Seq()
       }
       case _: ExecutorThrowable => {
@@ -67,5 +68,5 @@ class DestroyEnvStepCoordinator(val step: DestroyEnvStep,
 
   def onStepInterrupt(signal: Signal) = Seq()
 
-  def onStepStart() = for (vm <- context.vms) yield DestroyVmAction(vm)
+  def onStepStart() = for (vm <- context.virtualMachines if vm.status != VmStatus.Destroyed) yield DestroyVmAction(vm)
 }

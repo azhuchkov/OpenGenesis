@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.executors.provision
 
@@ -41,7 +41,12 @@ abstract class CommonProvisionExecutor extends SimpleAsyncActionExecutor
     action.ip.foreach(vm.setIp(_))
     vm = storeService.createVm(vm)
     vm.getIp.getOrElse(vmMetadataFuture = action.instanceId match {
-      case None =>  createVm(action.env, vm)
+      case None =>  {
+        val future = createVm(action.env, vm)
+        storeService.updateServer(vm)
+        future
+      }
+
       case some@Some(instanceId) => new VmMetadataFuture() {
         val getMetadata = some
       }
@@ -50,21 +55,34 @@ abstract class CommonProvisionExecutor extends SimpleAsyncActionExecutor
 
   def getResult(): Option[ActionResult] = {
     vm.getIp.map(_ => ProvisionCompleted(action, vm)) orElse
-      (vmMetadataFuture.getMetadata match {
-        case None => None
-        case Some(instanceId) => {
-          vm.instanceId = Some(instanceId)
-          log.debug("vm '%s' is provisioned successfuly", vm)
-          storeService.updateVm(vm)
-          Some(ProvisionCompleted(action, vm))
-        }
-      })
+      (processFuture(vm))
+  }
+
+  def processFuture(vm: VirtualMachine): Option[ActionResult] = {
+      vmMetadataFuture match {
+          case f: FailedVmFuture => {
+              vm.status = VmStatus.Failed
+              storeService.updateServer(vm)
+              Some(ProvisionFailed(action, Some(vm), timedOut = false))
+          }
+          case v: VmMetadataFuture => {
+              v.getMetadata match {
+                  case None => None
+                  case Some(instanceId) => {
+                      vm.instanceId = Some(instanceId)
+                      log.debug("vm '%s' is provisioned successfuly", vm)
+                      storeService.updateServer(vm)
+                      Some(ProvisionCompleted(action, vm))
+                  }
+              }
+          }
+      }
   }
 
   def getResultOnTimeout = {
     vm.status = VmStatus.Failed
-    storeService.updateVm(vm)
-    ProvisionFailed(action, Some(vm))
+    storeService.updateServer(vm)
+    ProvisionFailed(action, Some(vm), timedOut = true)
   }
 
   override def canRespond(s : Signal) = {

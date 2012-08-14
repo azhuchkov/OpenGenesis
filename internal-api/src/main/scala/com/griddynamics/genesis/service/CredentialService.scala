@@ -17,20 +17,20 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.service
 
-import com.griddynamics.genesis.model.{VirtualMachine, Environment}
+import com.griddynamics.genesis.model.{EnvResource, Environment}
 
 
 class Credentials(val identity : String, val credential : String)
 
 trait CredentialService {
     def defaultCredentials: Option[Credentials]
-    def getCredentialsForVm(env: Environment, vm: VirtualMachine): Option[Credentials]
-    def updateVmCredentials(env: Environment, vm: VirtualMachine, credentials: Credentials)
+    def getCredentials(env: Environment, server: EnvResource): Option[Credentials]
+    def updateServerCredentials(env: Environment, server: EnvResource, credentials: Credentials)
 }
 
 

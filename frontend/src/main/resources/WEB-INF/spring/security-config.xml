@@ -19,8 +19,8 @@
       OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
       OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-      @Project:     Genesis
-      @Description: Execution Workflow Engine
+      Project:     Genesis
+      Description:  Continuous Delivery Platform
 
 -->
 <beans xmlns="http://www.springframework.org/schema/beans"
@@ -50,11 +50,15 @@
         <s:intercept-url pattern="/rest/users*"   method="GET" access="hasRole('ROLE_GENESIS_ADMIN') or hasRole('ROLE_GENESIS_PROJECT_ADMIN')" />
 
         <s:intercept-url pattern="/rest/groups/**"   access="hasRole('ROLE_GENESIS_ADMIN')" />
+        <s:intercept-url pattern="/rest/roles/**"   access="hasRole('ROLE_GENESIS_ADMIN')" />
+        <s:intercept-url pattern="/rest/projectRoles**"   access="hasRole('ROLE_GENESIS_ADMIN') or hasRole('ROLE_GENESIS_PROJECT_ADMIN')" />
         <s:intercept-url pattern="/rest/users/**"    access="hasRole('ROLE_GENESIS_ADMIN')" />
         <s:intercept-url pattern="/rest/plugins/**"  access="hasRole('ROLE_GENESIS_ADMIN')" />
         <s:intercept-url pattern="/rest/settings/**" access="hasRole('ROLE_GENESIS_ADMIN')" />
+        <s:intercept-url pattern="/rest/databags**" access="hasRole('ROLE_GENESIS_ADMIN')" />
 
         <s:intercept-url pattern="/rest/projects" method="GET" access="isAuthenticated()"/>
+        <s:intercept-url pattern="/rest/projects/" method="GET" access="isAuthenticated()"/>
 
         <s:intercept-url pattern="/rest/projects/*/permissions" method="GET" access="hasRole('ROLE_GENESIS_ADMIN') or
                 hasPermission( #urlId('/rest/projects/{id}/.*', #url), 'com.griddynamics.genesis.api.Project', 'read') or
@@ -64,12 +68,17 @@
                     hasPermission( #urlId('/rest/projects/{id}/.*', #url), 'com.griddynamics.genesis.api.Project', 'read') or
                     hasPermission( #urlId('/rest/projects/{id}/.*', #url), 'com.griddynamics.genesis.api.Project', 'administration')"/>
 
+
+        <s:intercept-url pattern="/rest/projects/*/roles/**" access="hasRole('ROLE_GENESIS_ADMIN') or
+                    hasPermission( #urlId('/rest/projects/{id}/.*', #url), 'com.griddynamics.genesis.api.Project', 'administration')"  />
+
         <s:intercept-url pattern="/rest/projects/**" method="GET"    access="hasRole('ROLE_GENESIS_ADMIN') or
                     hasPermission( #urlId('/rest/projects/{id}.*', #url), 'com.griddynamics.genesis.api.Project', 'read') or
                     hasPermission( #urlId('/rest/projects/{id}.*', #url), 'com.griddynamics.genesis.api.Project', 'administration')" />
 
-        <s:intercept-url pattern="/rest/projects/*/roles/**" method="PUT" access="hasRole('ROLE_GENESIS_ADMIN') or
-                    hasPermission( #urlId('/rest/projects/{id}/.*', #url), 'com.griddynamics.genesis.api.Project', 'administration')"  />
+        <s:intercept-url pattern="/rest/projects/*/templates/**" method="POST"    access="hasRole('ROLE_GENESIS_ADMIN') or
+                    hasPermission( #urlId('/rest/projects/{id}.*', #url), 'com.griddynamics.genesis.api.Project', 'read') or
+                    hasPermission( #urlId('/rest/projects/{id}.*', #url), 'com.griddynamics.genesis.api.Project', 'administration')" />
 
         <s:intercept-url pattern="/rest/projects/*/**" access="hasRole('ROLE_GENESIS_ADMIN') or
                             hasPermission( #urlId('/rest/projects/{id}.*', #url), 'com.griddynamics.genesis.api.Project', 'administration')"/>
@@ -88,7 +97,8 @@
 
         <s:http-basic/>
         <s:logout logout-url="/logout" invalidate-session="true" logout-success-url="/login.html"/>
-        <s:remember-me key="GenesisRememberMeKey" token-validity-seconds="604800"/>
+        <s:remember-me key="GenesisRememberMeKey" token-validity-seconds="604800" user-service-ref="genesisUserDetailsService"/>
+        <s:custom-filter ref="headerBasedAuthFilter" after="BASIC_AUTH_FILTER"/>
 	</s:http>
 
 
@@ -108,17 +118,31 @@
             <s:password-encoder hash="sha-256"/>
             <s:jdbc-user-service data-source-ref="dataSource"/>
         </s:authentication-provider>-->
-
+        <s:authentication-provider ref="externalAuthenticationProvider"/>
         <s:authentication-provider user-service-ref="genesisUserDetailsService">
             <s:password-encoder hash="sha-256"/>
         </s:authentication-provider>
     </s:authentication-manager>
 
     <bean id="genesisUserDetailsService" class="com.griddynamics.genesis.spring.security.GenesisUserDetailsService">
-        <constructor-arg name="adminPassword" value="aeebad4a796fcc2e15dc4c6061b45ed9b373f26adfc798ca7d2d8cc58182718e"/>
-        <constructor-arg name="adminUsername" value="genesis" />
+        <!--
+            genesis.system.admin.sha.password=aeebad4a796fcc2e15dc4c6061b45ed9b373f26adfc798ca7d2d8cc58182718e
+            genesis.system.admin.username=genesis
+        -->
+        <constructor-arg name="adminPassword" value="${genesis.web.admin.sha.password:}"/>
+        <constructor-arg name="adminUsername" value="${genesis.web.admin.username:}" />
         <constructor-arg name="authorityService" ref="authorityService"/>
         <constructor-arg name="projectAuthorityService" ref="projectAuthorityService"/>
+    </bean>
+
+    <bean id="externalAuthenticationProvider" class="com.griddynamics.genesis.spring.security.ExternalUserAuthenticationProvider">
+        <constructor-arg ref="genesisExternalDetailsService"/>
+    </bean>
+
+    <bean id="genesisExternalDetailsService" class="com.griddynamics.genesis.spring.security.ExternalUserDetailsService">
+        <constructor-arg name="authorityService" ref="authorityService" type="com.griddynamics.genesis.service.AuthorityService"/>
+        <constructor-arg name="projectAuthorityService" ref="projectAuthorityService" type="com.griddynamics.genesis.service.ProjectAuthorityService"/>
+        <constructor-arg name="adminUsername" value="${genesis.web.admin.username:}" type="java.lang.String"/>
     </bean>
 
     <bean id="adAuthProvider" lazy-init="true"
@@ -129,5 +153,7 @@
 
     <bean id="nullProvider"
           class="org.springframework.security.config.authentication.AuthenticationManagerBeanDefinitionParser.NullAuthenticationProvider" />
+
+    <bean id="headerBasedAuthFilter" class="com.griddynamics.genesis.spring.security.HeaderBasedAuthFilter"/>
 
 </beans>

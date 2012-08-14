@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 
 package com.griddynamics.genesis.service
@@ -43,6 +43,8 @@ object GenesisSystemProperties {
 
     val SHUTDOWN_TIMEOUT = "genesis.system.shutdown.timeout.sec"
     val SERVICE_BACKEND_URL = "genesis.system.service.backendUrl"
+    val FRONTEND_READ_TIMEOUT = "genesis.web.frontend.readTimeout.ms"
+    val FRONTEND_CONNECT_TIMEOUT = "genesis.web.frontend.connectTimeout.ms"
     val SERVER_MODE = "genesis.system.server.mode"
     val SERVICE_REST_USEMOCK = "genesis.system.service.rest.use.mock"
     val SECURITY_CONFIG = "genesis.system.security.config"
@@ -52,4 +54,5 @@ object GenesisSystemProperties {
     val MAX_IDLE = "genesis.system.request.maxIdle"
     val WEB_RESOURCE_ROOTS = "genesis.system.web.resourceRoots"
     val CACHE_RESOURCES = "genesis.system.web.client.cache"
+    val LOGOUT_ENABLED = "genesis.web.logout.enabled"
 }

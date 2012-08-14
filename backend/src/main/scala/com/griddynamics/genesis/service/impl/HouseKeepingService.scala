@@ -17,8 +17,8 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @Project:     Genesis
- * @Description: Execution Workflow Engine
+ * Project:     Genesis
+ * Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.service.impl
 
@@ -47,7 +47,7 @@ class DefaultHousekeepingService extends HousekeepingService {
   }
 
   override def cancelAllWorkflows(envs: List[Environment]) {
-    envs.foreach { env => requestBroker.requestBroker.cancelWorkflow(env.name) }
+    envs.foreach { env => requestBroker.requestBroker.cancelWorkflow(env.id, env.projectId) }
   }
 
   @Transactional
@@ -59,10 +59,10 @@ class DefaultHousekeepingService extends HousekeepingService {
     )
 
     envWithFlow.iterator.foreach { case (envId, workflowName)  =>
-      val status: EnvStatusField = EnvStatus.Failed(workflowName)
+      val status = EnvStatus.Broken
       update(GS.envs) ( env =>
         where ( env.id === envId )
-          set ( env.status.value := status.value )
+          set ( env.status := status )
       )
     }
     GS.steps.update (step =>

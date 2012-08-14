@@ -17,8 +17,8 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @Project:     Genesis
- * @Description: Execution Workflow Engine
+ * Project:     Genesis
+ * Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.service.impl
 
@@ -57,6 +57,8 @@ class CredentialsStoreService(repository: CredentialsRepository, projectReposito
   def list(projectId: Int) = repository.list(projectId)
 
   def find(projectId: Int, cloudProvider: String, keypairName: String): Option[api.Credentials] = repository.find(projectId, cloudProvider, keypairName)
+
+  def findCredentials(projectId: Int, cloudProvider: String) = repository.find(projectId, cloudProvider)
 
   def decrypt(creds: api.Credentials): api.Credentials =
     creds.copy(credential = creds.credential.map (BasicCrypto.decrypt(keySpec, _)))

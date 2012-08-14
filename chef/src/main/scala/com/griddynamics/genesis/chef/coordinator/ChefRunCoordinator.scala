@@ -17,8 +17,8 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @Project:     Genesis
- * @Description: Execution Workflow Engine
+ * Project:     Genesis
+ * Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.chef.coordinator
 
@@ -31,6 +31,9 @@ import com.griddynamics.genesis.plugin.{GenesisStepResult, StepExecutionContext}
 import com.griddynamics.genesis.model.VmStatus
 import com.griddynamics.genesis.logging.InternalLogger
 import com.griddynamics.genesis.chef.{ChefVmAttrs, ChefPluginContext}
+import com.griddynamics.genesis.actions.json.{PreprocessingJsonAction, PreprocessingSuccess}
+import net.liftweb.json.JsonAST.{JObject, JField}
+import net.liftweb.json.JsonParser
 
 class ChefRunCoordinator(val step: ChefRun,
                          stepContext: StepExecutionContext,
@@ -41,15 +44,16 @@ class ChefRunCoordinator(val step: ChefRun,
 
   def onStepStart() = {
     writeLog("Starting phase %s".format(stepContext.step.phase))
-    val (tVms, clearVms) = stepContext.vms(step).filter(_.status == VmStatus.Ready).partition(_.get(ExecVmAttrs.HomeDir).isDefined)
+    val (tVms, clearVms) = stepContext.servers(step).filter(_.isReady).partition(_.get(ExecVmAttrs.HomeDir).isDefined)
     val (chefVms, execVms) = tVms.partition(_.get(ChefVmAttrs.ChefNodeName).isDefined)
 
     val clearActions = clearVms.map(InitExecNode(stepContext.env, _))
     val execActions = execVms.map(InitChefNode(stepContext.env, _))
+    val jsonActions = chefVms.map(m => PreprocessingJsonAction(stepContext.env, m, Map(), Map(), step.jattrs, step.templates, m.roleName))
     val chefActions = chefVms.map(PrepareRegularChefRun(stepContext.step.id.toString, stepContext.env,
       _, step.runList, step.jattrs))
 
-    clearActions ++ execActions ++ chefActions
+    clearActions ++ execActions ++ jsonActions ++ chefActions
   }
 
   def onActionFinish(result: ActionResult) = {
@@ -63,31 +67,35 @@ class ChefRunCoordinator(val step: ChefRun,
         Seq()
       }
       case ExecInitFail(a) => {
-        stepContext.updateVm(a.vm)
+        stepContext.updateServer(a.server)
         isStepFailed = true
         Seq()
       }
 
       case ExecInitSuccess(a) => {
-        stepContext.updateVm(a.vm)
-        Seq(InitChefNode(a.env, a.vm))
+        stepContext.updateServer(a.server)
+        Seq(InitChefNode(a.env, a.server))
       }
       case ChefInitSuccess(a, d) => {
-        stepContext.updateVm(a.vm)
+        stepContext.updateServer(a.server)
         Seq(RunPreparedExec(d, a))
       }
       case ChefRunPrepared(a, d) => {
         Seq(RunPreparedExec(d, a))
       }
       case ExecFinished(RunPreparedExec(details, _: InitChefNode), _) => {
-        Seq(PrepareInitialChefRun(details.env, details.vm))
+        Seq(PrepareInitialChefRun(details.env, details.server))
       }
       case ExecFinished(RunPreparedExec(details, _: PrepareInitialChefRun), _) => {
-        val label = "%d.%d.%s".format(stepContext.workflow.id, stepContext.step.id,
-          stepContext.step.phase)
-
-        Seq(PrepareRegularChefRun(label, details.env, details.vm, step.runList, step.jattrs))
+        Seq(PreprocessingJsonAction(details.env, details.server, Map(), Map(), step.jattrs, step.templates, details.server.roleName))
       }
+
+      case PreprocessingSuccess(action, server, json)  => {
+          val label = "%d.%d.%s".format(stepContext.workflow.id, stepContext.step.id,
+              stepContext.step.phase)
+          Seq(PrepareRegularChefRun(label, action.env, action.server, step.runList, JsonParser.parse(json).asInstanceOf[JObject]))
+      }
+
       case ExecFinished(RunPreparedExec(_, _: PrepareRegularChefRun), _) => {
         Seq()
       }
@@ -102,7 +110,7 @@ class ChefRunCoordinator(val step: ChefRun,
     GenesisStepResult(stepContext.step,
       isStepFailed = isStepFailed,
       envUpdate = stepContext.envUpdate(),
-      vmsUpdate = stepContext.vmsUpdate())
+      serversUpdate = stepContext.serversUpdate())
   }
 
   def getActionExecutor(action: Action) = {
@@ -111,6 +119,7 @@ class ChefRunCoordinator(val step: ChefRun,
       case a: InitExecNode => execPluginContext.execNodeInitializer(a)
       case a: InitChefNode => chefPluginContext.chefNodeInitializer(a)
       case a: PrepareInitialChefRun => chefPluginContext.initialChefRunPreparer(a)
+      case a: PreprocessingJsonAction => chefPluginContext.preprocessJsonAction(a)
       case a: PrepareRegularChefRun => chefPluginContext.regularChefRunPreparer(a)
       case a: RunExec => execPluginContext.execRunner(a)
     }

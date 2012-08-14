@@ -17,15 +17,15 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @Project:     Genesis
- * @Description: Execution Workflow Engine
+ * Project:     Genesis
+ * Description:  Continuous Delivery Platform
  */
 
 package com.griddynamics.genesis.rest
 
 import org.springframework.stereotype.Controller
 import org.springframework.beans.factory.annotation.Autowired
-import com.griddynamics.genesis.users.UserService
+import com.griddynamics.genesis.users.{UserServiceStub, UserService}
 import com.griddynamics.genesis.groups.GroupService
 import javax.servlet.http.HttpServletRequest
 import GenesisRestController._
@@ -36,8 +36,14 @@ import com.griddynamics.genesis.api.{ExtendedResult, User}
 @RequestMapping(Array("/rest/users"))
 class UsersController extends RestApiExceptionsHandler {
 
-    @Autowired(required = false) var userService: UserService = _
+    @Autowired(required = false) var userServiceBean: UserService = _
     @Autowired(required = false) var groupService: GroupService = _
+
+   private lazy val userService = Option(userServiceBean).getOrElse(UserServiceStub.get)
+
+    @RequestMapping(method = Array(RequestMethod.GET), params = Array("available"))
+    @ResponseBody
+    def available() = !userService.isReadOnly
 
     @RequestMapping(method = Array(RequestMethod.GET))
     @ResponseBody

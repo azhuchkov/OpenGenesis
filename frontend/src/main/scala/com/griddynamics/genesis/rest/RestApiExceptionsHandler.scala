@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @Project:     Genesis
- * @Description: Execution Workflow Engine
+ * Project:     Genesis
+ * Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.rest
 
@@ -60,5 +60,11 @@ trait RestApiExceptionsHandler {
     def handleResourceNotFound(response : HttpServletResponse, exception: ResourceNotFoundException) {
       response.setContentType(MediaType.APPLICATION_JSON.toString)
       response.getWriter.write(Serialization.write(new Failure(isNotFound = true, isSuccess = false, compoundServiceErrors = List(exception.msg))))
+    }
+
+    @ExceptionHandler(value = Array(classOf[UnsupportedOperationException]))
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    def handleUnsupported(response : HttpServletResponse, exception: UnsupportedOperationException) {
+        response.getWriter.write("{\"error\":\"Operation not supported\"}")
     }
 }

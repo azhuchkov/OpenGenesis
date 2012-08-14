@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.jclouds
 
@@ -30,8 +30,8 @@ import org.jclouds.compute.domain.NodeState
 import com.griddynamics.executors.provision.VmMetadataFuture
 import org.jclouds.compute.ComputeServiceContext
 import java.util.Properties
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
+import org.jclouds.ec2.reference.EC2Constants
 
 
 trait JCloudsVmCreationStrategyProvider {
@@ -61,7 +61,11 @@ class DefaultVmCreationStrategy(nodeNamePrefix: String, pluginContext: ComputeSe
 
   def createVm(env: Environment, vm: VirtualMachine): VmMetadataFuture = {
     val nodes = computeService.createNodesInGroup(group(env, vm), 1, template(env, vm))
-    new DefaultVmMetadataFuture(nodes.headOption.map(_.getId).get)
+
+    val instanceId = nodes.headOption.map(_.getId)
+    vm.instanceId = instanceId
+
+    new DefaultVmMetadataFuture(instanceId.get)
   }
 
   protected def template(env: Environment, vm: VirtualMachine) = {
@@ -102,11 +106,15 @@ object DefaultVmCreationStrategyProvider extends JCloudsVmCreationStrategyProvid
 @Component
 class Ec2VmCreationStrategyProvider extends JCloudsVmCreationStrategyProvider {
 
-  override val name = "aws-ec2";
+  override val name = "aws-ec2"
 
-  override val computeProperties = new Properties();
+  override val computeProperties = {
+    val overrides = new Properties()
+    overrides.setProperty(EC2Constants.PROPERTY_EC2_AMI_OWNERS, "")
+    overrides
+  }
 
-    override def createVmCreationStrategy(nodeNamePrefix:String, computeContext: ComputeServiceContext ): VmCreationStrategy = {
+  override def createVmCreationStrategy(nodeNamePrefix:String, computeContext: ComputeServiceContext ): VmCreationStrategy = {
     new DefaultVmCreationStrategy(nodeNamePrefix, computeContext) {
 
       override protected def templateOptions(env: Environment, vm: VirtualMachine) = {

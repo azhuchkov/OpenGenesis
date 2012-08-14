@@ -17,20 +17,23 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.model
 
 import WorkflowStepStatus._
+import java.sql.Timestamp
 
 //todo: consider adding retryCount & restarted fields to WorkflowStep class
 class WorkflowStep(val workflowId : GenesisEntity.Id,
                    val phase      : String,
                    var status     : WorkflowStepStatus,
-                   val details    : String) extends GenesisEntity{
+                   val details    : String,
+                   val started    : Option[java.sql.Timestamp],
+                   val finished   : Option[java.sql.Timestamp]) extends GenesisEntity{
 
-    def this() = this (0, "", Requested, "")
+    def this() = this (0, "", Requested, "", Some(new Timestamp(1)), Some(new Timestamp(1)))
 }
 
 object WorkflowStep{
@@ -38,14 +41,18 @@ object WorkflowStep{
               workflowId : GenesisEntity.Id,
               phase      : String,
               status     : WorkflowStepStatus,
-              details    : String) = {
+              details    : String,
+              started    : Option[java.sql.Timestamp] = None,
+              finished   : Option[java.sql.Timestamp] = None) = {
 
         val workflowStep =
                 new WorkflowStep(
                     workflowId,
                     phase,
                     status,
-                    details
+                    details,
+                    started,
+                    finished
                 )
 
         workflowStep.id = id

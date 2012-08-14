@@ -17,11 +17,15 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.executors.provision
 
 trait VmMetadataFuture {
   def getMetadata : Option[String]
+}
+
+trait FailedVmFuture extends VmMetadataFuture {
+   override def getMetadata = None
 }

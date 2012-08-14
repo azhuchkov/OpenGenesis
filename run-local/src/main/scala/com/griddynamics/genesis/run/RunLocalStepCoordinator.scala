@@ -17,8 +17,8 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @Project:     Genesis
- * @Description: Execution Workflow Engine
+ * Project:     Genesis
+ * Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.run
 
@@ -26,22 +26,25 @@ import com.griddynamics.genesis.plugin.{GenesisStepResult, StepExecutionContext,
 import com.griddynamics.genesis.workflow._
 import com.griddynamics.genesis.util.Logging
 import java.io.File
+import com.griddynamics.genesis.logging.LoggerWrapper
 
 class RunLocalStepCoordinator(stepContext: StepExecutionContext, val step: RunLocalStep, shellService: LocalShellExecutionService) extends ActionOrientedStepCoordinator with Logging {
   var isStepFailed = false
 
   var toExecute = new scala.collection.mutable.Queue[Action]()
 
-  def onStepStart() = {
-    step.output.map { directory =>
+  def onStepStart(): Seq[Action] = {
+    step.output.foreach { directory =>
       if(!directory.exists() && !directory.mkdirs()) {
-        throw new IllegalStateException("Failed to create output directory %s".format(directory.getAbsolutePath))
+        LoggerWrapper.writeLog(stepContext.step.id, "Couldn't create directory [%s]".format(directory.getAbsolutePath))
+        isStepFailed = true
+        return Seq()
       }
     }
 
     val actions = step.commands.zipWithIndex.map { case (command, index) =>
       val outputDirectory = step.output.map(new File(_, index.toString))
-      new RunLocalShell(step.shell, command, outputDirectory)
+      new RunLocalShell(step.shell, command, step.successExitCode, outputDirectory)
     }
 
     if(step.runInParallel) {
@@ -60,6 +63,9 @@ class RunLocalStepCoordinator(stepContext: StepExecutionContext, val step: RunLo
     }
     case a: RunLocalResult => {
       isStepFailed = a.response.exitCode != step.successExitCode
+      if(isStepFailed) {
+        LoggerWrapper.writeLog(a.action.uuid, "FAILURE: Process finished with exit code %d, expected result = %d".format(a.response.exitCode, step.successExitCode))
+      }
       if (!isStepFailed && !toExecute.isEmpty) {
         Seq(toExecute.dequeue())
       } else {
@@ -75,7 +81,7 @@ class RunLocalStepCoordinator(stepContext: StepExecutionContext, val step: RunLo
   def getStepResult() = GenesisStepResult(stepContext.step,
     isStepFailed = isStepFailed,
     envUpdate = stepContext.envUpdate(),
-    vmsUpdate = stepContext.vmsUpdate())
+    serversUpdate = stepContext.serversUpdate())
 
   def getActionExecutor(action: Action) = action match {
     case a: RunLocalShell => new RunLocalActionExecutor(a, stepContext.step.id, shellService)

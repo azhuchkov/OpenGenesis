@@ -17,35 +17,46 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.service
 
 import java.lang.RuntimeException
 import com.griddynamics.genesis.common.Mistake
 import com.griddynamics.genesis.model._
+import com.griddynamics.genesis.model.EnvStatus._
+import com.griddynamics.genesis.model.WorkflowStepStatus._
+import java.sql.Timestamp
 
 trait StoreService {
-    def listEnvs(): Seq[Environment]
     def listEnvs(projectId: Int): Seq[Environment]
     def listEnvs(projectId: Int, start : Int, limit : Int): Seq[Environment]
-    def countEnvs(projectId: Int) : Int
+    def listEnvs(projectId: Int, statuses: Seq[EnvStatus]): Seq[Environment]
+    def countEnvs(projectId: Int): Int
+    def countEnvs(projectId: Int, statuses: Seq[EnvStatus]): Int
 
-    def findEnv(name: String): Option[Environment]
+    def findEnv(id: Int, projectId: Int): Option[Environment]
+    def findEnvWithWorkflow(id: Int, projectId: Int): Option[(Environment, Option[Workflow])]
+    def findEnv(id: Int): Option[Environment]
+    def findEnv(envName: String, projectId: Int): Option[Environment]
 
-    def isEnvExist(projectId: Int, envName: String): Boolean
+    def isEnvExist(projectId: Int, envId: Int): Boolean
 
     def getVm(instanceId: String): (Environment, VirtualMachine)
 
     def listVms(env: Environment): Seq[VirtualMachine]
+    def listServers(env: Environment): Seq[BorrowedMachine]
 
     def listWorkflows(env: Environment): Seq[Workflow]
+    def listWorkflows(env: Environment, pageOffset: Int, pageLength: Int): Seq[Workflow]
+    def countWorkflows(env: Environment): Int
 
     def listEnvsWithWorkflow(projectId: Int): Seq[(Environment, Option[Workflow])]
+    def listEnvsWithWorkflow(projectId: Int, statuses: Seq[EnvStatus]): Seq[(Environment, Option[Workflow])]
     def listEnvsWithWorkflow(projectId: Int, start : Int, limit : Int): Seq[(Environment, Option[Workflow])]
 
-    def workflowsHistory(env : Environment): Seq[(Workflow, Seq[WorkflowStep])]
+    def workflowsHistory(env : Environment, pageOffset: Int, pageLength: Int): Seq[(Workflow, Seq[WorkflowStep])]
 
     def listWorkflowSteps(workflow : Workflow): Seq[WorkflowStep]
 
@@ -54,22 +65,30 @@ trait StoreService {
 
     def updateEnv(env: Environment)
 
+    def resetEnvStatus(env: Environment): Option[Mistake]
+
     def updateWorkflow(w: Workflow)
 
     def createVm(vm: VirtualMachine): VirtualMachine
 
-    def updateVm(vm: VirtualMachine)
+    def updateServer(vm: EnvResource)
+
+    def createBM(bm: BorrowedMachine): BorrowedMachine
 
     // TODO @throws(classOf[WorkflowRequestFailed])
     def requestWorkflow(env: Environment, workflow: Workflow): Either[Mistake, (Environment, Workflow)]
 
-    def retrieveWorkflow(envName: String): (Environment, Workflow)
+    def retrieveWorkflow(envId: Int, projectId: Int): (Environment, Workflow)
 
-    def startWorkflow(envName: String): (Environment, Workflow, Seq[VirtualMachine])
+    def startWorkflow(envId: Int, projectId: Int): (Environment, Workflow, Seq[EnvResource])
 
     def finishWorkflow(env: Environment, workflow: Workflow)
 
     def updateStep(step : WorkflowStep)
+
+    def updateStepStatus(stepId: Int, status: WorkflowStepStatus)
+
+    def updateStepDetailsAndStatus(stepId: Int, details: Option[String], status: WorkflowStepStatus)
 
     def insertWorkflowSteps(steps : Seq[WorkflowStep])
 
@@ -77,14 +96,18 @@ trait StoreService {
 
     def allocateStepCounters(count : Int = 1) : Int
   
-    def writeLog(stepId: Int, message: String)
-    
+    def writeLog(stepId: Int, message: String, timestamp: Timestamp)
+    def writeActionLog(actionUUID: String, message: String, timestamp: Timestamp)
+
     def getLogs(stepId: Int) : Seq[StepLogEntry]
+
+    def getLogs(actionUUID: String) : Seq[StepLogEntry]
 
     def startAction(actionTracking: ActionTracking): ActionTracking
     def endAction(uuid: String, message: Option[String], status: ActionTrackingStatus.ActionStatus)
     def cancelRunningActions(stepId: Int)
     def getActionLog(stepId: Int) : List[ActionTracking]
+    def findBorrowedMachinesByServerId(serverId: Int): Seq[BorrowedMachine]
 }
 
 class StoreServiceException extends RuntimeException

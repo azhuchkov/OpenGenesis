@@ -17,38 +17,46 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.core
 
 import scala.collection.mutable
 import com.griddynamics.genesis.plugin._
-import com.griddynamics.genesis.workflow.{StepCoordinator, Signal, StepResult, FlowCoordinator}
+import com.griddynamics.genesis.workflow._
 import com.griddynamics.genesis.service.StoreService
-import com.griddynamics.genesis.workflow.signal.{Success, Fail}
 import com.griddynamics.genesis.model._
+import com.griddynamics.genesis.model.EnvStatus._
 import com.griddynamics.genesis.common.Mistake
 import com.griddynamics.genesis.util.Logging
-import com.griddynamics.genesis.workflow.step.CoordinatorThrowable
 import com.griddynamics.genesis.logging.LoggerWrapper
 import com.griddynamics.genesis.service.impl.StepBuilderProxy
+import com.griddynamics.genesis.plugin.Cancel
+import com.griddynamics.genesis.workflow.step.ActionStepResult
+import com.griddynamics.genesis.plugin.GenesisStepResult
+import com.griddynamics.genesis.workflow.signal.Success
+import com.griddynamics.genesis.workflow.step.CoordinatorThrowable
+import com.griddynamics.genesis.plugin.GenesisStep
+import com.griddynamics.genesis.workflow.signal.Fail
 
-abstract class GenesisFlowCoordinator(envName: String,
-                             flowSteps: Seq[StepBuilder],
-                             storeService: StoreService,
-                             stepCoordinatorFactory: StepCoordinatorFactory)
-    extends GenesisFlowCoordinatorBase(envName, flowSteps, storeService, stepCoordinatorFactory)
+abstract class GenesisFlowCoordinator(envId: Int,
+                                      projectId: Int,
+                                      flowSteps: Seq[StepBuilder],
+                                      storeService: StoreService,
+                                      stepCoordinatorFactory: StepCoordinatorFactory)
+    extends GenesisFlowCoordinatorBase(envId, projectId, flowSteps, storeService, stepCoordinatorFactory)
     with StepIgnore with StepRestart with StepExecutionContextHolder
 
-abstract class GenesisFlowCoordinatorBase(val envName: String,
+abstract class GenesisFlowCoordinatorBase(val envId: Int,
+                                          val projectId: Int,
                                           val flowSteps: Seq[StepBuilder],
                                           val storeService: StoreService,
                                           val stepCoordinatorFactory: StepCoordinatorFactory)
     extends FlowCoordinator with Logging {
 
     var env: Environment = _
-    var vms: Seq[VirtualMachine] = _
+    var servers: Seq[EnvResource] = _
 
     var workflow: Workflow = _
 
@@ -59,14 +67,14 @@ abstract class GenesisFlowCoordinatorBase(val envName: String,
 
     def flowDescription = {
       val workflowName = if (workflow == null) "*undefined at this stage*" else workflow.name
-      "Workflow[env='%s', name='%s']".format(envName, workflowName)
+      "Workflow[env='%s', name='%s']".format(envId, workflowName)
     }
 
     def onFlowStart() = {
-        val (iEnv, iWorkflow, iVms) = storeService.startWorkflow(envName)
+        val (iEnv, iWorkflow, iServers) = storeService.startWorkflow(envId, projectId)
 
         env = iEnv
-        vms = iVms
+        servers = iServers
         workflow = iWorkflow
 
         workflow.stepsCount = stepsToStart.size
@@ -81,12 +89,13 @@ abstract class GenesisFlowCoordinatorBase(val envName: String,
         import WorkflowStatus._
         val (workflowStatus, envStatus) = signal match {
             case Success() => (Succeed, onFlowFinishSuccess)
-            case Cancel() => (Canceled, EnvStatus.Canceled(workflow.name))
-            case _ => (Failed, EnvStatus.Failed(workflow.name))
+            case Cancel() => (Canceled, EnvStatus.Broken)
+            case _ => (Failed, EnvStatus.Broken)
         }
         workflow.status = workflowStatus
-        env.status = envStatus
-        storeService.finishWorkflow(env, workflow)
+        val updEnv = storeService.findEnv(env.id).get // updating optimistic lock counter
+        updEnv.status = envStatus
+        storeService.finishWorkflow(updEnv, workflow)
     }
 
     def onStepFinish(result: StepResult) = result match {
@@ -191,11 +200,13 @@ trait StepExecutionContextHolder extends GenesisFlowCoordinatorBase {
     var envState: Option[GenesisEntity.Id] = None
     val vmsState = mutable.Map[GenesisEntity.Id, GenesisEntity.Id]() // vm.id -> step.id
 
+    val serverState = mutable.Map[GenesisEntity.Id, GenesisEntity.Id]() //server.id -> step.id
+
     val globals = mutable.Map[String, AnyRef]()
     val pluginContext = mutable.Map[String,Any]()
 
     def createStepExecutionContext(step: GenesisStep) =
-        new StepExecutionContextImpl(step, env.copy(), vms.map(_.copy()), workflow.copy(), globals, pluginContext)
+        new StepExecutionContextImpl(step, env.copy(), servers.map(_.copy()), workflow.copy(), globals, pluginContext)
 
     abstract override def onStepFinish(result: GenesisStepResult) = {
         handleEnvState(result)
@@ -212,12 +223,26 @@ trait StepExecutionContextHolder extends GenesisFlowCoordinatorBase {
     }
 
     private def exportToContext(result: GenesisStepResult) {
+      import scala.collection.JavaConversions._
       result.step.exportTo.foreach { case (from, to) =>
         try {
+
           val actualResult: StepResult = result.actualResult.getOrElse(
             throw new IllegalStateException("Exporting to context was specified in template, but step produced no actual results")
           )
-          globals(to) = actualResult.getClass.getDeclaredMethod(from).invoke(actualResult)
+
+          val resultObject = actualResult match {
+            case r: ActionStepResult => r.actionResult
+            case r => r
+          }
+          val resultValue = resultObject.getClass.getDeclaredMethod(from).invoke(resultObject)
+
+          globals(to) = resultValue match {
+            case map: scala.collection.Map[_, _] => mapAsJavaMap(map)
+            case traversable: scala.collection.Traversable[_] => seqAsJavaList(traversable.toSeq)
+            case other => other
+          }
+
         } catch {
           case e => {
             LoggerWrapper.writeLog(result.step.id, "Failed to export step result to context: export settings = " + result.step.exportTo)
@@ -238,31 +263,37 @@ trait StepExecutionContextHolder extends GenesisFlowCoordinatorBase {
     }
 
     def handleVmsState(result: GenesisStepResult) {
-        for (uVm <- result.vmsUpdate) {
-            val vmsStateId = vmsState.get(uVm.id)
+        for (uVm <- result.serversUpdate) {
+            val stateMap = uVm match {
+              case vm: VirtualMachine => vmsState
+              case server: BorrowedMachine => serverState
+            }
+
+            val vmsStateId = stateMap.get(uVm.id)
 
             if (vmsStateId.isDefined && flowStepsTemplate.isStepsParallel(vmsStateId.get, result.step.id))
                 log.warn("Parallel modification of vm '%s' detected on step '%s'", uVm, result.step)
 
             updateVm(uVm)
-            vmsState(uVm.id) = result.step.id
+            stateMap(uVm.id) = result.step.id
         }
     }
 
-    def updateVm(vm: VirtualMachine) {
-        val index = vms.indexWhere(_.id == vm.id)
+    def updateVm(vm: EnvResource) {
+        val index = servers.indexWhere(it => it.id == vm.id && it.getClass == vm.getClass)
 
         if (index == -1)
-            vms = vms :+ vm
+            servers = servers :+ vm
         else
-            vms = vms.updated(index, vm)
+            servers = servers.updated(index, vm)
     }
+
 }
 
 trait RegularWorkflow { this: GenesisFlowCoordinatorBase =>
-    override val onFlowFinishSuccess = EnvStatus.Ready()
+    override val onFlowFinishSuccess = EnvStatus.Ready
 }
 
 trait DestroyWorkflow { this: GenesisFlowCoordinatorBase =>
-    override val onFlowFinishSuccess = EnvStatus.Destroyed()
+    override val onFlowFinishSuccess = EnvStatus.Destroyed
 }

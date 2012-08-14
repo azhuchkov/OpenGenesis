@@ -17,8 +17,8 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @Project:     Genesis
- * @Description: Execution Workflow Engine
+ * Project:     Genesis
+ * Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.spring.security
 
@@ -56,7 +56,7 @@ class GenesisUserDetailsService( adminUsername: String,
           authorityService.getAuthorities(groups) ++
             authorityService.getUserAuthorities(user.username) ++
             groups.map("GROUP_" + _.name) ++
-            (if (projectAuthorityService.isUserProjectAdmin(user.username, groups)) List(GenesisRole.ProjectAdmin.toString) else List())
+            (if (projectAuthorityService.isUserProjectAdmin(user.username, groups.map(_.name))) List(GenesisRole.ProjectAdmin.toString) else List())
           ).distinct
         if(!authorities.contains(GenesisRole.GenesisUser.toString)) {
           throw new UsernameNotFoundException("User doesn't have required role [%s]".format(GenesisRole.GenesisUser))

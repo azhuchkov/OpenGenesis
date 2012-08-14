@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) 2010-2012 Grid Dynamics Consulting Services, Inc, All Rights Reserved
  *   http://www.griddynamics.com
  *
@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.configuration
 
@@ -31,18 +31,21 @@ import com.griddynamics.genesis.spring.ApplicationContextAware
 import com.griddynamics.genesis.service.TemplateService
 import javax.annotation.Resource
 import com.griddynamics.genesis.template.{DependentListFactory, ListVarDSFactory, DataSourceFactory}
+import com.griddynamics.genesis.template.support.DatabagDataSourceFactory
+import net.sf.ehcache.CacheManager
 
 @Configuration
 class GroovyTemplateServiceContext {
     @Autowired var templateRepositoryContext: TemplateRepositoryContext = _
     @Autowired var stepBuilderFactories: Array[StepBuilderFactory] = _
     @Autowired var varDataSourceFactories: Array[DataSourceFactory] = _
+    @Autowired var storeServiceContext: StoreServiceContext = _
+    @Autowired var cacheManager: CacheManager = _
 
     @Bean(name = Array("groovy")) def templateService = new GroovyTemplateService(
         templateRepositoryContext.templateRepository, stepBuilderFactories,
         ConversionServiceFactory.createDefaultConversionService(),
-        varDataSourceFactories
-    )
+        varDataSourceFactories, storeServiceContext.databagRepository, cacheManager)
 }
 
 @Configuration
@@ -51,4 +54,11 @@ class DefaultTemplateServiceContext extends TemplateServiceContext with Applicat
     @Bean def templateService = service
     @Bean def listVarDsFactory = new ListVarDSFactory
     @Bean def depList = new DependentListFactory
+}
+
+@Configuration
+class CoreDataSourcesContext {
+  @Autowired var storeServiceContext: StoreServiceContext = _
+
+  @Bean def databagDsFactory = new DatabagDataSourceFactory(storeServiceContext.databagRepository)
 }

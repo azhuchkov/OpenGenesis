@@ -17,41 +17,32 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 
 package com.griddynamics.genesis.template
 
-class ListVarDataSource extends VarDataSource with DependentDataSource {
-    val Key = "list"
-    var values: Seq[String] = _
+import scala.collection.JavaConversions._
 
-    def getData = values.zip(values).toMap
+class ListVarDataSource extends VarDataSource {
+    val Key = "values"
+    var values: Map[String, String] = _
 
-    def getData(v: Any) = values.zip(values.map(v.toString + ":" + _)).toMap
+    def getData = values
 
     def config(map: Map[String, Any])  { values = map.get(Key) match {
-            case Some(s: java.lang.Iterable[AnyRef]) => collection.JavaConversions.iterableAsScalaIterable(s).toArray.map(_.toString).toSeq
-            case x => Seq(x.toString)
+            case Some(s: java.lang.Iterable[AnyRef]) =>
+              collection.JavaConversions.iterableAsScalaIterable(s).toArray.map(v => (v.toString, v.toString)).toMap
+            case Some(s: java.util.Map[AnyRef, AnyRef]) => s.toMap.map(entry => (entry._1.toString, entry._2.toString))
+            case x => Map(x.toString -> x.toString)
         }
     }
 }
 
-class DependentList extends DependentDataSource {
-    val Key = "list"
-    var values: Seq[String] = _
-
-    def getData(v: Any) = values.zip(values.map(v.toString.takeRight(24) + ":" + _)).toMap
-    def getData(v1: Any, v2: Any) = values.zip(values.map(v1.toString.takeRight(32) + v2.toString + _)).toMap
-
-    def getData = Map()
-
-    def config(map: Map[String, Any])  { values = map.get(Key) match {
-            case Some(s: java.lang.Iterable[AnyRef]) => collection.JavaConversions.iterableAsScalaIterable(s).toArray.map(_.toString).toSeq
-            case x => Seq(x.toString)
-        }
-    }
+class DependentList extends ListVarDataSource with DependentDataSource {
+    def getData(v: Any) = values.mapValues(value => v.toString.takeRight(24) + ":" + value)
+    def getData(v1: Any, v2: Any) = values.mapValues(value => v1.toString.takeRight(32) + v2.toString + value)
 }
 
 class DependentListFactory extends DataSourceFactory {

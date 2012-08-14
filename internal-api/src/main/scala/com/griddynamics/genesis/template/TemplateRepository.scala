@@ -17,22 +17,10 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.template
-
-/*
- * Copyright (c) 2011 Grid Dynamics Consulting Services, Inc, All Rights Reserved
- *   http://www.griddynamics.com
- *
- *   For information about the licensing and copyright of this document please
- *   contact Grid Dynamics at info@griddynamics.com.
- *
- *   $Id: $
- *   @Project:     Genesis
- *   @Description: A cloud deployment platform
- */
 
 import org.bouncycastle.crypto.digests.SHA1Digest
 import org.bouncycastle.util.encoders.Base64
@@ -42,7 +30,14 @@ import com.griddynamics.genesis.api.{Tag, VcsProject}
 trait TemplateRepository {
     def listSources() : Map[VersionedTemplate, String]
     /** Content for specific versioned template */
-    def getContent(vt: VersionedTemplate) : Option[String] = listSources().find(_._1 == vt).map(_._2)
+
+    def getContent(vt: VersionedTemplate) : Option[String] = {
+      val predicate = vt.version match {
+        case "LATEST" => { v: VersionedTemplate => v.name == vt.name }
+        case _ => { v: VersionedTemplate => v == vt.name }
+      }
+      listSources().find { case (versionedTmpl, body) =>  predicate(versionedTmpl) }.map(_._2)
+    }
 }
 
 trait SourceControl {

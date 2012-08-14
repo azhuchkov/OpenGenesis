@@ -17,15 +17,15 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @Project:     Genesis
- * @Description: Execution Workflow Engine
+ * Project:     Genesis
+ * Description:  Continuous Delivery Platform
  */
 
 package com.griddynamics.genesis.rest
 
 import org.springframework.stereotype.Controller
 import org.springframework.beans.factory.annotation.Autowired
-import com.griddynamics.genesis.groups.GroupService
+import com.griddynamics.genesis.groups.{GroupServiceStub, GroupService}
 import javax.servlet.http.HttpServletRequest
 import GenesisRestController._
 import org.springframework.web.bind.annotation._
@@ -36,9 +36,16 @@ import com.griddynamics.genesis.spring.ApplicationContextAware
 @Controller
 @RequestMapping(Array("/rest/groups"))
 class GroupController extends RestApiExceptionsHandler with ApplicationContextAware {
-    @Autowired(required = false) var groupService: GroupService = _
+    @Autowired(required = false) private var groupServiceBean: GroupService = _
+    private lazy val groupService = Option(groupServiceBean).getOrElse(GroupServiceStub.get)
 
-    lazy val userService: Option[UserService] = Option(applicationContext.getBean(classOf[UserService]))
+    @Autowired(required = false) private var userServiceBean: UserService = _
+    private lazy val userService = Option(userServiceBean)
+
+
+    @RequestMapping(method = Array(RequestMethod.GET), params = Array("available"))
+    @ResponseBody
+    def available() = !groupService.isReadOnly
 
     @RequestMapping(method = Array(RequestMethod.GET))
     @ResponseBody
@@ -46,11 +53,12 @@ class GroupController extends RestApiExceptionsHandler with ApplicationContextAw
 
     @RequestMapping(value=Array("{id}"), method = Array(RequestMethod.GET))
     @ResponseBody
-    def get(@PathVariable(value = "id") id: Int) = groupService.get(id)
+    def get(@PathVariable(value = "id") id: Int) = groupService.get(id).getOrElse(throw new ResourceNotFoundException("Group [id = %d] was not found".format(id)))
 
     @RequestMapping(method = Array(RequestMethod.GET), params = Array("tag"))
     @ResponseBody
-    def pick(@RequestParam("tag") search: String) = groupService.search("*" + search + "*").map(item => Map("key" -> item.name, "value" -> item.name))
+    def pick(@RequestParam("tag") search: String) = if (available()) groupService.search("*" + search + "*").map(item => Map("key" -> item.name, "value" -> item.name))
+    else Map()
 
     @RequestMapping(method = Array(RequestMethod.POST))
     @ResponseBody

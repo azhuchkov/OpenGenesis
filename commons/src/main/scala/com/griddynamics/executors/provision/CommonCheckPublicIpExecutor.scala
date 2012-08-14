@@ -17,13 +17,13 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.executors.provision
 
 import com.griddynamics.genesis.util.Logging
-import com.griddynamics.genesis.model.VmStatus
+import com.griddynamics.genesis.model.{IpAddresses, VmStatus}
 import com.griddynamics.genesis.actions.provision._
 import com.griddynamics.genesis.workflow._
 import com.griddynamics.genesis.service.{StoreService, ComputeService}
@@ -33,8 +33,13 @@ class CommonCheckPublicIpExecutor(val action: CheckPublicIpAction,
                                   storeService: StoreService,
                                   val timeoutMillis : Long) extends SimpleAsyncActionExecutor with AsyncTimeoutAwareActionExecutor with Logging {
   def getResult() : Option[ActionResult] = {
+    val vm = action.vm
     log.debug("Checking public ip of vm: '%s'", action.vm)
     val pubIp = computeService.getIpAddresses(action.vm).flatMap(_.publicIp)
+    pubIp.foreach { ip =>
+      vm.setIp(ip)
+      storeService.updateServer(vm)
+    }
     pubIp.map(_ => PublicIpCheckCompleted(action))
   }
 
@@ -42,7 +47,7 @@ class CommonCheckPublicIpExecutor(val action: CheckPublicIpAction,
 
   def getResultOnTimeout = {
     action.vm.status = VmStatus.Failed
-    storeService.updateVm(action.vm)
+    storeService.updateServer(action.vm)
     PublicIpCheckFailed(action, action.vm)
   }
 }

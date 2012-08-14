@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.chef.step
 
@@ -33,9 +33,10 @@ sealed trait ChefStep extends Step
 case class ChefRun(roles: Set[String],
                    isGlobal: Boolean,
                    runList: Seq[String] = Seq(),
-                   jattrs: JObject = JObject(List())) extends ChefStep with RoleStep {
+                   jattrs: JObject = JObject(List()),
+                   templates: Option[String]) extends ChefStep with RoleStep {
 
-  override val stepDescription = new Describer("Chef recipe execution").param("receipes", runList).describe
+  override val stepDescription = new Describer("Chef recipe execution").param("recipes", runList).param("templates", templates).describe
 }
 
 case class CreateChefDatabag(databag: String,

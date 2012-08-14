@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.workflow
 
@@ -27,30 +27,36 @@ import com.griddynamics.genesis.model.ActionTrackingStatus
 
 /* Marker trait for any particular action */
 trait Action {
-    def desc = getClass.getSimpleName.replaceAll(
-      String.format("%s|%s|%s",        // PascalCaseName  -> Pascal Case Name
-        "(?<=[A-Z])(?=[A-Z][a-z])",
-        "(?<=[^A-Z])(?=[A-Z])",
-        "(?<=[A-Za-z])(?=[^A-Za-z])"
-      ),
-      " ")
+    def desc = DefaultDescription.toString(this)
 
     final val uuid = util.UUID.randomUUID().toString
 }
 
 /* Base trait for result of particular action */
 trait ActionResult {
-    val action: Action
-    def desc = getClass.getSimpleName
+    def action: Action
+
+    def desc = DefaultDescription.toString(this)
+
     def outcome: ActionTrackingStatus.ActionStatus = ActionTrackingStatus.Succeed
 }
 
+object DefaultDescription {
+  def toString(obj: AnyRef) = obj.getClass.getSimpleName.replaceAll(
+    String.format("%s|%s|%s", // PascalCaseName  -> Pascal Case Name
+      "(?<=[A-Z])(?=[A-Z][a-z])",
+      "(?<=[^A-Z])(?=[A-Z])",
+      "(?<=[A-Za-z])(?=[^A-Za-z])"
+    ),
+    " ")
+}
+
 trait ActionFailed extends ActionResult {
-    override val outcome = ActionTrackingStatus.Failed
+    override def outcome = ActionTrackingStatus.Failed
 }
 
 trait ActionInterrupted extends ActionResult {
-    override val outcome = ActionTrackingStatus.Interrupted
+    override def outcome = ActionTrackingStatus.Interrupted
 }
 
 package action {

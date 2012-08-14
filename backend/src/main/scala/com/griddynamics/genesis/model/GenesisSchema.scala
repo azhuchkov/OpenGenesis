@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.model
 
@@ -31,6 +31,10 @@ trait GenesisSchema extends Schema {
     val envs = table[Environment]("environment")
     val workflows = table[Workflow]("workflow")
     val vms = table[VirtualMachine]("virtual_machine")
+
+    val borrowedMachines = table[BorrowedMachine]("borrowed_machine")
+    val serverAttrs = table[SquerylEntityAttr]("borrowed_machine_attrs")
+
     val steps = table[WorkflowStep]("workflow_step")
 
     val vmAttrs = table[SquerylEntityAttr]("vm_attribute")
@@ -39,7 +43,6 @@ trait GenesisSchema extends Schema {
     val logs = table[StepLogEntry]("step_logs")
   
     val projects = table[Project]("project")
-    val projectProperties = table[ProjectProperty]("project_property")
     val settings = table[ConfigProperty]("settings")
     val credentials = table[Credentials]("credentials")
 
@@ -47,9 +50,12 @@ trait GenesisSchema extends Schema {
     val groupAuthorities = table[Authority]("group_authorities")
 
     val serverArrays = table[ServerArray]("server_array")
-    val servers = table[Server]("static_server")
+    val servers = table[Server]("predefined_server")
 
     val actionTracking = table[ActionTracking]("action_tracking")
+
+    val dataBags = table[DataBag]("databag")
+    val dataBagItems = table[DataBagItem]("databag_item")
 }
 
 trait GenesisSchemaPrimitive extends GenesisSchema {
@@ -74,14 +80,14 @@ trait GenesisSchemaPrimitive extends GenesisSchema {
     val envsToProject = oneToManyRelation(projects, envs).via((project, environment) => project.id === environment.projectId)
     envsToProject.foreignKeyDeclaration.constrainReference(onDelete cascade)
 
-    val projectPropertiesToProject = oneToManyRelation(projects, projectProperties).via((project, projectProperty) => project.id === projectProperty.projectId)
-    projectPropertiesToProject.foreignKeyDeclaration.constrainReference(onDelete cascade)
+    val serverArrayToProject = oneToManyRelation(projects, serverArrays).via((project, array) => project.id === array.projectId)
+    serverArrayToProject.foreignKeyDeclaration.constrainReference(onDelete cascade)
 
     val serverToServerArray = oneToManyRelation(serverArrays, servers).via((array, server) => array.id === server.serverArrayId)
+    serverToServerArray.foreignKeyDeclaration.constrainReference(onDelete cascade)
 
-    on(envs)(env => declare(
-        env.name is (unique)
-    ))
+    val itemToDatabag = oneToManyRelation(dataBags, dataBagItems).via((bag, item) => bag.id === item.dataBagId)
+    itemToDatabag.foreignKeyDeclaration.constrainReference(onDelete cascade)
 
     on(vmAttrs)(attr => declare(
         attr.value is (dbType("text"))
@@ -101,18 +107,19 @@ trait GenesisSchemaPrimitive extends GenesisSchema {
     ))
 
     on(logs) (log => declare(
-      log.message is (dbType("text"))
+      log.message is (dbType("text")),
+      log.actionUUID is dbType("varchar(36)"),
+      columns(log.actionUUID) are (indexed("logs_action_uuid_idx"))
     ))
 
     on(projects) (project=> declare(
       project.name is (unique),
-      project.description is (dbType("text"))
+      project.description is (dbType("text")),
+      project.isDeleted defaultsTo(false)
     ))
 
-    on(projectProperties) (projectProperty => declare(
-      projectProperty.id is (primaryKey, autoIncremented),
-      columns(projectProperty.projectId, projectProperty.name) are (unique),
-      projectProperty.value is (dbType("text"))
+    on(envs) (env => declare(
+      columns(env.name, env.projectId) are (unique)
     ))
 
     on(credentials)(creds => declare(
@@ -130,7 +137,7 @@ trait GenesisSchemaPrimitive extends GenesisSchema {
     ))
 
     on(actionTracking)(tracking => declare(
-        tracking.description is dbType("varchar(256)"),
+        tracking.description is dbType("text"),
         tracking.actionName is dbType("varchar(256)"),
         tracking.actionUUID is dbType("varchar(36)"),
         columns(tracking.workflowStepId) are (indexed("step_idx")),
@@ -140,19 +147,38 @@ trait GenesisSchemaPrimitive extends GenesisSchema {
     on(serverArrays)(array => declare (
       array.id is (primaryKey, autoIncremented),
       array.name is dbType("varchar(128)"),
-      array.description is dbType("varchar(128)")
+      array.description is dbType("varchar(128)"),
+      columns(array.projectId, array.name) are (unique)
     ))
 
     on(servers)(server => declare (
       server.id is (primaryKey, autoIncremented),
-      server.instanceId is dbType("varchar(128)")
+      server.instanceId is dbType("varchar(128)"),
+      columns(server.serverArrayId, server.instanceId) are (unique)
+    ))
+
+    on(serverAttrs)(attr => declare (
+      attr.value is (dbType("text"))
+    ))
+
+    on(dataBags)(bag => declare (
+      bag.id is (primaryKey, autoIncremented),
+      bag.name is (dbType("varchar(128)")),
+      bag.tags is (dbType("varchar(512)")),
+      bag.projectId is (dbType("int")),
+      columns(bag.name, bag.projectId) are (unique)
+    ))
+
+    on(dataBagItems)(item => declare (
+      item.id is (primaryKey, autoIncremented),
+      columns(item.dataBagId, item.itemKey) are (unique),
+      item.itemKey is (dbType("varchar(256)")),
+      item.itemValue is (dbType("varchar(256)"))
     ))
 }
 
 trait GenesisSchemaCustom extends GenesisSchema {
-
     import org.squeryl.customtypes.CustomTypesMode._
-
     on(workflows)(workflow => declare(
         workflow.variables is (dbType("varchar(4096)"))
     ))

@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.exec
 
@@ -31,23 +31,25 @@ import com.griddynamics.genesis.util.Describer
 
 sealed trait ExecStep extends Step
 
-case class ExecRunStep(roles: Set[String], ipOfRole: String,
-                       script: String) extends ExecStep with RoleStep {
-  def isGlobal = false
+case class ExecRunStep(roles: Set[String], isGlobal: Boolean, commands: IndexedSeq[String], successExitCode: Int, outputDirectory: String) extends ExecStep with RoleStep {
 
-  override val stepDescription = new Describer("Executing shell script").param("script", script).describe
+  override val stepDescription = new Describer("Executing shell script").param("script", commands).describe
 }
 
 
 class ExecRunStepBuilderFactory extends StepBuilderFactory {
-  val stepName = "execrun"
+  import scala.collection.JavaConversions._
+
+  val stepName = "execRemote"
 
   def newStepBuilder = new StepBuilder {
     @BeanProperty var roles: JList[String] = Collections.emptyList()
-    @BeanProperty var ipOfRole: String = _
-    @BeanProperty var script: String = _
+    @BeanProperty var commands: JList[String] = Collections.emptyList()
+    @BeanProperty var successExitCode: Int = 0
+    @BeanProperty var outputDirectory: String = ExecNodeInitializer.genesisDir.toString
+    @BeanProperty var isGlobal : Boolean = false
 
-    def getDetails = ExecRunStep(JC.asScalaBuffer(roles).toSet, ipOfRole, script)
+    def getDetails = ExecRunStep(roles.toSet, isGlobal, commands.toIndexedSeq, successExitCode, outputDirectory)
   }
 }
 

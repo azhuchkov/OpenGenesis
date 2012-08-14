@@ -17,31 +17,20 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.exec
 
 package action
-/*
- * Copyright (c) 2011 Grid Dynamics Consulting Services, Inc, All Rights Reserved
- *   http://www.griddynamics.com
- *
- *   For information about the licensing and copyright of this document please
- *   contact Grid Dynamics at info@griddynamics.com.
- *
- *   $Id: $
- *   @Project:     Genesis
- *   @Description: A cloud deployment platform
- */
 
-import com.griddynamics.genesis.model.{VirtualMachine, Environment}
 import com.griddynamics.genesis.workflow.{ActionFailed, ActionResult, Action}
 import com.griddynamics.genesis.model
+import model.{Environment, EnvResource}
 
 sealed trait ExecAction extends Action
 
-case class InitExecNode(env: Environment, vm: VirtualMachine) extends ExecAction
+case class InitExecNode(env: Environment, server: EnvResource) extends ExecAction
 
 trait RunExec extends ExecAction {
     val execDetails: ExecDetails
@@ -53,6 +42,8 @@ case class RunPreparedExec(execDetails: ExecDetails, prepareAction: Action) exte
 
 case class RunExecWithArgs(execDetails: ExecDetails, args: String*) extends RunExec
 
+case class UploadScripts(env:Environment, server: EnvResource, workingDir: String, script: String) extends ExecAction
+
 /* ------------------------------------- Results ------------------------------------- */
 
 trait ExecResult extends ActionResult
@@ -61,10 +52,13 @@ case class ExecInitSuccess(action: InitExecNode) extends ExecResult
 
 case class ExecInitFail(action: InitExecNode) extends ExecResult with ActionFailed
 
-case class ExecFinished(action: RunExec, exitStatus: Option[Int]) extends ExecResult {
+case class ExecFinished(action: RunExec, val exitStatus: Option[Int]) extends ExecResult {
     def isExecSuccess = exitStatus.isDefined && exitStatus.get == 0
     override def outcome = if (isExecSuccess)
         model.ActionTrackingStatus.Succeed
     else
         model.ActionTrackingStatus.Failed
 }
+
+
+case class ScriptsUploaded(action: UploadScripts, server: EnvResource, outputPath: String, scriptPath: String) extends ExecResult

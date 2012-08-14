@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @Project:     Genesis
- * @Description: Execution Workflow Engine
+ * Project:     Genesis
+ * Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.exec
 
@@ -36,7 +36,7 @@ import com.griddynamics.genesis.exec.action.{ExecResult, ExecFinished, RunExec}
 class ExecRunner(val action: RunExec, sshService: SshService) extends AsyncActionExecutor with Logging {
   val uuid = UUID.randomUUID.toString
 
-  lazy val sshClient = sshService.sshClient(action.execDetails.env, action.execDetails.vm)
+  lazy val sshClient = sshService.sshClient(action.execDetails.env, action.execDetails.server)
 
   def startAsync() {
     sshClient.exec {

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) 2010-2012 Grid Dynamics Consulting Services, Inc, All Rights Reserved
  *   http://www.griddynamics.com
  *
@@ -17,22 +17,28 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.service.impl
 
 import org.scalatest.junit.AssertionsForJUnit
 import org.scalatest.mock.MockitoSugar
-import org.junit.Test
+import org.junit.{Before, Test}
 import org.mockito.Mockito
 import org.springframework.core.convert.support.ConversionServiceFactory
 import com.griddynamics.genesis.util.Logging
 import com.griddynamics.genesis.template.dsl.groovy.WorkflowDeclaration
 import scala.Array
 import com.griddynamics.genesis.template.{VersionedTemplate, TemplateRepository}
+import com.griddynamics.genesis.repository.DatabagRepository
+import net.sf.ehcache.CacheManager
 
 class GroovyTemplateSyntaxTest extends AssertionsForJUnit with Logging with MockitoSugar {
+
+    @Before def setUp() {
+      CacheManager.getInstance().clearAll()
+    }
 
     //Template declaration
     
@@ -169,13 +175,15 @@ class GroovyTemplateSyntaxTest extends AssertionsForJUnit with Logging with Mock
 
     def getTemplateDefinition(script: String) = {
         val templateRepository = mock[TemplateRepository]
+        val bagRepository = mock[DatabagRepository]
         Mockito.when(templateRepository.listSources).thenReturn(Map(VersionedTemplate("1") -> script))
+        Mockito.when(templateRepository.getContent(VersionedTemplate("1") )).thenReturn(Some(script))
 
         val templateService = new GroovyTemplateService(templateRepository,
             List(
               new DoNothingStepBuilderFactory
             ),
-            ConversionServiceFactory.createDefaultConversionService())
+            ConversionServiceFactory.createDefaultConversionService(), Seq(), bagRepository, CacheManager.getInstance())
 
         templateService.listTemplates(0).headOption match {
             case Some((name, version)) => templateService.findTemplate(0, name, version)

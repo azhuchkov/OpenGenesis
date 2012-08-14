@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.service
 
@@ -45,15 +45,19 @@ trait WorkflowDefinition {
 
     def variableDescriptions: Seq[VariableDescription]
 
-    def embody(variables: Map[String, String], envName: Option[String] = None): Seq[StepBuilder]
+    def embody(variables: Map[String, String], envId: Option[Int] = None, projectId: Option[Int] = None): Seq[StepBuilder]
 
-    def validate(variables: Map[String, Any], envName: Option[String] = None): Seq[ValidationError]
+    def validate(variables: Map[String, Any], envId: Option[Int] = None, projectId: Option[Int] = None): Seq[ValidationError]
 
     def partial(variables: Map[String, Any]): Seq[VariableDescription] = Seq()
 }
 
+case class TemplateDescription (name: String, version: String, createWorkflow: String, destroyWorkflow: String, workflows: Seq[String])
+
 trait TemplateService {
-    def templateRawContent(projectId: Int, name: String, version: String): Option[String]
     def listTemplates(projectId: Int): Seq[(String, String)] // (name, version)
     def findTemplate(projectId: Int, templateName: String, templateVersion: String): Option[TemplateDefinition]
+
+    def descTemplate(projectId: Int, templateName: String, templateVersion: String): Option[TemplateDescription]
+    def templateRawContent(projectId: Int, name: String, version: String): Option[String]
 }

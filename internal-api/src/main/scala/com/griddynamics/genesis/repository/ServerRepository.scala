@@ -17,8 +17,8 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @Project:     Genesis
- * @Description: Execution Workflow Engine
+ * Project:     Genesis
+ * Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.repository
 
@@ -32,4 +32,6 @@ trait ServerRepository extends Repository [Server]{
   def deleteServer (arrayId: Int, serverId: Int ): Int
 
   def listServers(serverArrayId: Int): Seq[Server]
+
+  def get(arrayId: Int, serverId: Int): Option[api.Server]
 }

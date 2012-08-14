@@ -17,12 +17,12 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.service
 
-import com.griddynamics.genesis.model.{IpAddresses, VirtualMachine}
+import com.griddynamics.genesis.model.{EnvResource, IpAddresses, VirtualMachine}
 
 /**
  * Cloud library independent compute service abstraction. Implementations should be provided by plugins

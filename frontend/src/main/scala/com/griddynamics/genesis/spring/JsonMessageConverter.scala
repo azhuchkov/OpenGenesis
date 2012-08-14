@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.spring
 
@@ -52,12 +52,12 @@ class JsonMessageConverter
     }
 
     private def getStatus(requestResult : AnyRef) : Int = requestResult match  {
-        case RequestResult(_, _, _, _, true, _) => 200
-        case RequestResult(_, _, _, _, false, true) => 404
-        case RequestResult(_, _, _, _, false, _) => 400
+        case RequestResult(_, _, _, _, true, _, _) => 200
+        case RequestResult(_, _, _, _, false, true, _) => 404
+        case RequestResult(_, _, _, _, false, _, _) => 400
         case Success(_, _) => 200
-        case Failure(_, _, _, _, false, false) => 400
-        case Failure(_, _, _, _, true, _) => 404
+        case Failure(_, _, _, _, false, false, _) => 400
+        case Failure(_, _, _, _, true, _, _) => 404
         case _ => -1
     }
 

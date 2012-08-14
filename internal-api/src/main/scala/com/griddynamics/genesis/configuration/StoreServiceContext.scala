@@ -17,16 +17,17 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.configuration
 
 import com.griddynamics.genesis.service.StoreService
-import com.griddynamics.genesis.repository.ProjectRepository
+import com.griddynamics.genesis.repository.{DatabagRepository, ProjectRepository}
 
 trait StoreServiceContext {
     def storeService : StoreService
     def projectRepository : ProjectRepository
+    def databagRepository: DatabagRepository
 }
 

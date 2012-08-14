@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.users.service
 
@@ -28,7 +28,7 @@ import com.griddynamics.genesis.validation.Validation
 import com.griddynamics.genesis.validation.Validation._
 import com.griddynamics.genesis.users.repository.LocalUserRepository
 import org.springframework.beans.factory.annotation.Autowired
-import com.griddynamics.genesis.service.AuthorityService
+import com.griddynamics.genesis.service.{ProjectAuthorityService, AuthorityService}
 import com.griddynamics.genesis.groups.GroupService
 import com.griddynamics.genesis.api._
 
@@ -36,6 +36,9 @@ class LocalUserService(val repository: LocalUserRepository, val groupService: Gr
 
     @Autowired
     var authorityService: AuthorityService = null
+
+    @Autowired
+    var projectAuthorityService: ProjectAuthorityService = null
 
     @Transactional(readOnly = true)
     override def getWithCredentials(username: String) = repository.getWithCredentials(username)
@@ -86,6 +89,7 @@ class LocalUserService(val repository: LocalUserRepository, val groupService: Gr
     @Transactional(propagation = Propagation.REQUIRED, readOnly = false)
     override def delete(a: User) = {
       authorityService.removeAuthoritiesFromUser(a.username)
+      projectAuthorityService.removeUserFromProjects(a.username)
       if (repository.delete(a) == 0)
          Failure()
       else
@@ -111,7 +115,8 @@ class LocalUserService(val repository: LocalUserRepository, val groupService: Gr
             mustMatchEmail(user, user.email, "E-Mail") ++
             must(user, "Email [%s] is already registered for other user".format(user.email)) {
                 user => repository.findByEmail(user.email).filter(_.username != user.username).isEmpty
-            }
+            } ++
+            mustSatisfyLengthConstraints(user, user.jobTitle.getOrElse(""), "Job Title")(0, 128)
 
     protected def validateCreation(user: User) = {
             must(user, "User with username [" + user.username + "] is already registered") {
@@ -124,7 +129,8 @@ class LocalUserService(val repository: LocalUserRepository, val groupService: Gr
             mustMatchPersonName(user, user.firstName, "First Name") ++
             mustMatchPersonName(user, user.lastName, "Last Name") ++
             mustMatchEmail(user, user.email, "E-Mail") ++
-            notEmpty(user, user.password.getOrElse(""), "Password")
+            notEmpty(user, user.password.getOrElse(""), "Password") ++
+            mustSatisfyLengthConstraints(user, user.jobTitle.getOrElse(""), "Job Title")(0, 128)
     }
 
 

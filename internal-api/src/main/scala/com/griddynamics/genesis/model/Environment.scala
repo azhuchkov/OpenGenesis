@@ -17,22 +17,21 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.model
 
 import com.griddynamics.genesis.model.EnvStatus._
-import org.squeryl.customtypes.StringField
-import scala.Some
+import org.squeryl.Optimistic
 
 class Environment(val name: String,
-                  var status: EnvStatusField,
+                  var status: EnvStatus,
                   val creator: String,
                   val templateName: String,
                   var templateVersion: String,
-                  val projectId: GenesisEntity.Id) extends EntityWithAttrs {
-    def this() = this ("", Requested(""), "", "", "", 0)
+                  val projectId: GenesisEntity.Id) extends EntityWithAttrs with Optimistic {
+    def this() = this ("", Busy, "", "", "", 0)
 
     def copy() = {
         val env = new Environment(name, status, creator, templateName,
@@ -40,19 +39,18 @@ class Environment(val name: String,
         env.id = this.id
         env
     }
-}
 
-class EnvStatusField(value: String) extends StringField(value) {
-    def this(status: EnvStatus) = this (status.toString)
+    def deploymentAttrs: Seq[DeploymentAttribute] = {
+      this.get(Environment.DeploymentAttr).getOrElse(Seq())
+    }
 
-    private val status = EnvStatus.fromString(value) match {
-        case Some(valueStatus) => valueStatus
-        case None => null
+    def deploymentAttrs_=(attrs: Seq[DeploymentAttribute]) {
+      this(Environment.DeploymentAttr)  = attrs
     }
 }
 
-object EnvStatusField {
-    implicit def statusToEnvStatusField(status: EnvStatus): EnvStatusField = new EnvStatusField(status)
+object Environment {
+  val DeploymentAttr = EntityAttr[Seq[DeploymentAttribute]]("deployment")
 
-    implicit def envStatusFieldToStatus(field: EnvStatusField): EnvStatus = field.status
 }
+case class DeploymentAttribute(key: String, value: String, desc: String)

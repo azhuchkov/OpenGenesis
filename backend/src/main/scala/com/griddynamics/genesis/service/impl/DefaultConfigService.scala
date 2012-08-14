@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 
 package com.griddynamics.genesis.service.impl
@@ -57,10 +57,16 @@ class DefaultConfigService(val config: Configuration, val writeConfig: Configura
          .map(k => api.ConfigProperty(k, config.getString(k), isReadOnly(k), desc(k))).toSeq.sortBy(_.name)
 
     @Transactional
-    def update(name: String, value: Any) {writeConfig.setProperty(name, value)}
+    def update(name: String, value: Any) = isReadOnly(name) match {
+        case true => throw new IllegalArgumentException("Could not modify read-only property")
+        case _ => writeConfig.setProperty(name, value)
+    }
 
     @Transactional
-    def delete(key: String) = writeConfig.clearProperty(key)
+    def delete(key: String) = isReadOnly(key) match {
+        case true => throw new IllegalArgumentException("Could not modify read-only property")
+        case _ => writeConfig.clearProperty(key)
+    }
 
     @Transactional
     def clear(prefix: Option[String]) {prefix.map(writeConfig.subset(_)).getOrElse(writeConfig).clear}

@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 
 package com.griddynamics.genesis.rest
@@ -31,10 +31,13 @@ import com.griddynamics.genesis.service.CredentialsStoreService
 import com.griddynamics.genesis.api
 import com.griddynamics.genesis.rest.GenesisRestController._
 import org.springframework.web.bind.annotation._
+import org.springframework.beans.factory.annotation.Autowired
 
 @Controller
 @RequestMapping(Array("/rest/projects/{projectId}/credentials"))
-class CredentialsController(service: CredentialsStoreService) extends RestApiExceptionsHandler {
+class CredentialsController extends RestApiExceptionsHandler {
+
+  @Autowired var service: CredentialsStoreService = _
 
   @RequestMapping(value = Array(""), method = Array(RequestMethod.POST))
   @ResponseBody
@@ -45,7 +48,14 @@ class CredentialsController(service: CredentialsStoreService) extends RestApiExc
 
   @RequestMapping(value = Array(""), method = Array(RequestMethod.GET))
   @ResponseBody
-  def listCredentials(@PathVariable("projectId") projectId: Int) = service.list(projectId).map(_.copy(credential = None))
+  def listCredentials(@PathVariable("projectId") projectId: Int, @RequestParam(value = "type", required = false) credentialsType: String) = {
+    val creds = if(credentialsType == null) {
+      service.list(projectId)
+    } else {
+      service.findCredentials(projectId, credentialsType)
+    }
+    creds.map(_.copy(credential = None))
+  }
 
   @RequestMapping(value = Array("{id}"), method = Array(RequestMethod.DELETE))
   @ResponseBody
@@ -53,7 +63,9 @@ class CredentialsController(service: CredentialsStoreService) extends RestApiExc
 
   @RequestMapping(value = Array("{id}"), method = Array(RequestMethod.GET))
   @ResponseBody
-  def getCredentials(@PathVariable("projectId") projectId: Int, @PathVariable("id") credId: Int) = service.get(projectId, credId).map(_.copy(credential = None))
+  def getCredentials(@PathVariable("projectId") projectId: Int, @PathVariable("id") credId: Int) =
+      service.get(projectId, credId).map(_.copy(credential = None)).orElse(
+      throw new ResourceNotFoundException("Credential [id = %d] was not found in Project [id = %d]".format(credId, projectId)))
 
 
   private def extractCredentials(request: HttpServletRequest, projectId: Int, id: Option[Int]): api.Credentials = {

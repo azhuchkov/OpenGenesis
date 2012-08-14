@@ -19,67 +19,49 @@
       OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
       OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-      @Project:     Genesis
-      @Description: Execution Workflow Engine
+      Project:     Genesis
+      Description:  Continuous Delivery Platform
 
 -->
 <beans xmlns="http://www.springframework.org/schema/beans"
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-       xmlns:s="http://www.springframework.org/schema/security"
+       xmlns:s="http://www.springframework.org/schema/security" xmlns:aop="http://www.springframework.org/schema/aop"
        xsi:schemaLocation="http://www.springframework.org/schema/beans
                            http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
                            http://www.springframework.org/schema/security
-       http://www.springframework.org/schema/security/spring-security.xsd
-       " >
+       http://www.springframework.org/schema/security/spring-security.xsd http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop-2.0.xsd">
     <import resource="mvc-config.xml"/>
 
     <s:global-method-security pre-post-annotations="enabled" proxy-target-class="true" />
 
-    <bean id="genesisService" class="com.griddynamics.genesis.spring.GenesisServiceFactoryBean">
-        <constructor-arg name="useMock" value="${genesis.system.service.rest.use.mock:false}"/>
-        <constructor-arg name="genesisRestService" ref="genesisRestService"/>
-    </bean>
+    <aop:aspectj-autoproxy proxy-target-class="true"/>
+     <!--Aspects-->
+    <bean class="com.griddynamics.genesis.spring.aop.ProjectBoundaryCheckingAspect"   />
 
-    <bean class="com.griddynamics.genesis.rest.ProjectsController">
-        <constructor-arg name="projectService" ref="projectService"/>
-        <constructor-arg name="authorityService" ref="projectAuthorityService"/>
-    </bean>
+    <!-- Controllers -->
+    <bean class="com.griddynamics.genesis.rest.ProjectsController"/>
 
-    <bean class="com.griddynamics.genesis.rest.ProjectPropertiesController"/>
+    <bean class="com.griddynamics.genesis.rest.ProjectDatabagController"/>
 
     <bean class="com.griddynamics.genesis.rest.UsersController"/>
 
     <bean class="com.griddynamics.genesis.rest.GroupController"/>
 
-    <bean class="com.griddynamics.genesis.rest.PluginsController">
-        <constructor-arg name="repository" ref="pluginRepository"/>
-    </bean>
+    <bean class="com.griddynamics.genesis.rest.PluginsController"/>
 
-    <bean class="com.griddynamics.genesis.rest.EnvironmentsController">
-        <constructor-arg name="genesisService" ref="genesisService"/>
-    </bean>
+    <bean class="com.griddynamics.genesis.rest.EnvironmentsController"/>
 
-    <bean class="com.griddynamics.genesis.rest.GenesisRestController">
-        <constructor-arg name="genesisService" ref="genesisService"/>
-        <constructor-arg name="templateService" ref="templateService"/>
-    </bean>
+    <bean class="com.griddynamics.genesis.rest.GenesisRestController"/>
 
-    <bean class="com.griddynamics.genesis.rest.CredentialsController">
-        <constructor-arg name="service" ref="credentialsStoreService"/>
-    </bean>
+    <bean class="com.griddynamics.genesis.rest.CredentialsController"/>
 
-    <bean class="com.griddynamics.genesis.rest.SettingsController">
-        <constructor-arg name="configService" ref="configService"/>
-    </bean>
+    <bean class="com.griddynamics.genesis.rest.SettingsController"/>
 
-    <bean class="com.griddynamics.genesis.rest.RolesController">
-        <constructor-arg name="authorityService" ref="authorityService"/>
-        <constructor-arg name="projectAuthorityService" ref="projectAuthorityService"/>
-    </bean>
+    <bean class="com.griddynamics.genesis.rest.RolesController"/>
 
-    <bean class="com.griddynamics.genesis.rest.ServersController">
-        <constructor-arg name="service" ref="serversService"/>
-    </bean>
+    <bean class="com.griddynamics.genesis.rest.ServersController"/>
+
+    <bean class="com.griddynamics.genesis.rest.DatabagController"/>
 
     <bean class="com.griddynamics.genesis.rest.WhoamiController"/>
 </beans>

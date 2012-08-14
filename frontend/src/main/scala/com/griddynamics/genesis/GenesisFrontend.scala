@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis
 
@@ -44,15 +44,13 @@ import org.springframework.web.context.WebApplicationContext.ROOT_WEB_APPLICATIO
 import java.util.concurrent.TimeUnit
 import java.lang.System
 import scala.collection.JavaConversions._
-import org.springframework.security.web.FilterChainProxy
-import org.springframework.security.web.authentication.logout.LogoutFilter
 
 object GenesisFrontend extends Logging {
-    val logoutEnabledParamName = "genesis.web.logout.enabled"
     def main(args: Array[String]): Unit = try{
         val genesisProperties = loadGenesisProperties()
 
         val securityConfig = genesisProperties.getOrElse(SECURITY_CONFIG, "classpath:/WEB-INF/spring/security-config.xml")
+        val logoutEnabled = genesisProperties.getOrElse(LOGOUT_ENABLED, true)
         val isFrontend = genesisProperties.get(SERVICE_BACKEND_URL).isDefined
         val isBackend = genesisProperties.getOrElse(SERVER_MODE, "frontend") == "backend"
 
@@ -96,25 +94,25 @@ object GenesisFrontend extends Logging {
             context.addFilter(gzipFilterHolder, "/*", 0)
         }
 
+        val securityFilterHolder = new FilterHolder(new DelegatingFilterProxy)
+        securityFilterHolder.setName("springSecurityFilterChain")
+        context.addFilter(securityFilterHolder, "/*", 0)
+        context.setInitParameter(LOGOUT_ENABLED, logoutEnabled.toString)
+
         if (! isBackend) {
-            val securityFilterHolder = new FilterHolder(new DelegatingFilterProxy)
-            securityFilterHolder.setName("springSecurityFilterChain")
-            context.addFilter(securityFilterHolder, "/*", 0)
             val resourceHolder = new FilterHolder(new ResourceFilter)
             resourceHolder.setName("resourceFilter")
             resourceHolder.setInitParameter("resourceRoots", resourceRoots)
             resourceHolder.setInitParameter("cacheResources", cacheResources)
             context.addFilter(resourceHolder, "/*", 0)
-            val bean: FilterChainProxy = appContext.getBean(classOf[FilterChainProxy])
-            val logoutEnabled = bean.getFilterChains.flatMap(chain => chain.getFilters.toIterable
-              .filter(f => f.isInstanceOf[LogoutFilter])).size > 0
-            context.setInitParameter(logoutEnabledParamName, logoutEnabled.toString)
         }
 
         if (isFrontend) {
             val proxyFilter = new TunnelFilter("/rest") with UrlConnectionTunnel
             val proxyHolder = new FilterHolder(proxyFilter)
             proxyHolder.setInitParameter(TunnelFilter.BACKEND_PARAMETER, helper.getFileProperty(SERVICE_BACKEND_URL, ""))
+            proxyHolder.setInitParameter(TunnelFilter.READ_TIMEOUT, helper.getFileProperty(FRONTEND_READ_TIMEOUT, "5000"))
+            proxyHolder.setInitParameter(TunnelFilter.CONNECT_TIMEOUT, helper.getFileProperty(FRONTEND_CONNECT_TIMEOUT, "5000"))
             proxyHolder.setName("tunnelFilter")
             context.addFilter(proxyHolder, "/*", 0)
         }

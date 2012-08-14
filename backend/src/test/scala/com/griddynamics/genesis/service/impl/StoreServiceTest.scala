@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.service.impl
 
@@ -58,7 +58,7 @@ class StoreServiceTest extends MustMatchersForJUnit {
 
     @Test def testRetrieveWorkflow() {
         transaction {
-            storeService.retrieveWorkflow(env.name)
+            storeService.retrieveWorkflow(env.id, env.projectId)
         }
     }
 
@@ -71,7 +71,7 @@ class StoreServiceTest extends MustMatchersForJUnit {
     }
 
     @Test def testFindEnv {
-        val e = transaction { storeService.findEnv(env.name)}
+        val e = transaction { storeService.findEnv(env.name, env.projectId)}
         e must be (Some(env))
         e.get(EnvAttr1) must be (EnvAttrVal1)
         e.get(EnvAttr2) must be (EnvAttrVal2)
@@ -94,18 +94,18 @@ class StoreServiceTest extends MustMatchersForJUnit {
 
         project =  GenesisSchema.projects.insert(new Project("project1", Some("test project"), "Nina, Soto"));
 
-        env = new Environment("env", EnvStatus.Requested("workflow"), "owner", "template", "0.1", project.id)
+        env = new Environment("env", EnvStatus.Busy, "owner", "template", "0.1", project.id)
         env(EnvAttr1) = EnvAttrVal1
-        workflow = new Workflow(env.id, "workflow", WorkflowStatus.Requested, 0, 0, Map[String, String](), None)
+        workflow = new Workflow(env.id, "workflow", "owner", WorkflowStatus.Requested, 0, 0, Map[String, String](), None, None)
 
         val (e, w) = storeService.createEnv(env, workflow).right.get
-        env = e;
-        workflow = w;
+        env = e
+        workflow = w
 
-        vm1 = new VirtualMachine(env.id, 0, 0, VmStatus.Provision, "vm1", 0, Some("i1"), Option("1"), Option("95"))
+        vm1 = new VirtualMachine(env.id, 0, 0, VmStatus.Provision, "vm1",  Some("i1"), Option("1"), Option("95"))
         vm1(IpAttr) = IP1
 
-        vm2 = new VirtualMachine(env.id, 0, 0, VmStatus.Provision, "vm2", 2, Some("i2"), Option("1"), Option("95"))
+        vm2 = new VirtualMachine(env.id, 0, 0, VmStatus.Provision, "vm2",  Some("i2"), Option("1"), Option("95"))
         vm2(IpAttr) = IP2
 
         vm1 = storeService.createVm(vm1)

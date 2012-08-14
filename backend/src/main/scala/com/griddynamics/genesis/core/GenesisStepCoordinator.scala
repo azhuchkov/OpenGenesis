@@ -17,15 +17,15 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.core
 
 import com.griddynamics.genesis.workflow._
 import com.griddynamics.genesis.plugin._
 import com.griddynamics.genesis.service.StoreService
-import com.griddynamics.genesis.model.{ActionTracking, Workflow, WorkflowStep}
+import com.griddynamics.genesis.model.{ActionTracking, Workflow}
 import com.griddynamics.genesis.model.WorkflowStepStatus._
 import scala.Some
 import com.griddynamics.genesis.plugin.GenesisStepResult
@@ -58,14 +58,14 @@ class GenesisStepCoordinator(val step: GenesisStep,
                 if (result.isInstanceOf[EnvUpdateResult])
                     genesisResult = genesisResult.copy(envUpdate = result.asInstanceOf[EnvUpdateResult].envUpdate)
 
-                if (result.isInstanceOf[VmsUpdateResult])
-                    genesisResult = genesisResult.copy(vmsUpdate = result.asInstanceOf[VmsUpdateResult].vmsUpdate)
+                if (result.isInstanceOf[ServersUpdateResult])
+                    genesisResult = genesisResult.copy(serversUpdate = result.asInstanceOf[ServersUpdateResult].serversUpdate)
 
                 genesisResult
             }
         }
 
-        setStepStatus(if(genesisStepResult.isStepFailed) Failed else Succeed)
+        setStepDetailsAndStatus(if(genesisStepResult.isStepFailed) Failed else Succeed)
         genesisStepResult
     }
 
@@ -77,15 +77,11 @@ class GenesisStepCoordinator(val step: GenesisStep,
     }
 
     private def setStepStatus(status : WorkflowStepStatus) {
-        storeService.updateStep(
-                WorkflowStep(
-                    step.id,
-                    workflow.id,
-                    step.phase,
-                    status,
-                    step.actualStep.stepDescription
-                )
-        )
+        storeService.updateStepStatus(step.id, status)
+    }
+
+    private def setStepDetailsAndStatus(status : WorkflowStepStatus) {
+        storeService.updateStepDetailsAndStatus(step.id, Some(step.actualStep.stepDescription), status)
     }
 
     private def trackStart(result: scala.Seq[ActionExecutor]) : Seq[ActionExecutor] = {

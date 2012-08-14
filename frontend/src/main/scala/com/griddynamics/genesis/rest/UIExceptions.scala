@@ -17,22 +17,23 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.rest
 
+// RuntimeException are important for spring aspects to work property
 
-class InvalidInputException() extends Exception
+class InvalidInputException() extends RuntimeException
 
-class MissingParameterException(s : String) extends Exception {
+class MissingParameterException(s : String) extends RuntimeException {
     val paramName = s
 }
 
 /**
  * @param msg mandatory explanation of what wasn't found
  */
-class ResourceNotFoundException(val msg: String) extends Exception
+class ResourceNotFoundException(val msg: String) extends RuntimeException
 
 
-class ResourceConflictException() extends Exception
+class ResourceConflictException() extends RuntimeException

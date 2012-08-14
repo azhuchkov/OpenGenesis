@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @Project:     Genesis
- * @Description: Execution Workflow Engine
+ * Project:     Genesis
+ * Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.jclouds.step
 
@@ -35,7 +35,8 @@ case class ProvisionVm(roleName: String,
                        instanceId: Option[String],
                        ip: Option[String] = None,
                        keyPair: Option[String] = None,
-                       securityGroup: Option[String] = None) extends JCloudsStep with RoleStep {
+                       securityGroup: Option[String] = None,
+                       account: scala.collection.Map[String, String] = Map()) extends JCloudsStep with RoleStep {
   def isGlobal = true
 
   def roles = Set(roleName)

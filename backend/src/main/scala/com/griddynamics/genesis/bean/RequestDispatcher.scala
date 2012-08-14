@@ -17,8 +17,8 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @Project:     Genesis
- *   @Description: Execution Workflow Engine
+ *   Project:     Genesis
+ *   Description:  Continuous Delivery Platform
  */
 package com.griddynamics.genesis.bean
 
@@ -30,18 +30,18 @@ import com.griddynamics.genesis.core._
 import com.griddynamics.genesis.service.{TemplateService, StoreService}
 import collection.mutable.ArrayBuffer
 import com.griddynamics.genesis.plugin.{StepBuilder, Cancel, StepCoordinatorFactory}
-import com.griddynamics.genesis.model.{EnvStatus, Workflow, Environment}
+import com.griddynamics.genesis.model.{GenesisEntity, EnvStatus, Workflow, Environment}
 import com.griddynamics.genesis.model.WorkflowStatus._
 import com.griddynamics.genesis.util.Logging
 
 trait RequestDispatcher {
-    def createEnv(envName: String)
+    def createEnv(envName: Int, projectId: Int)
 
-    def startWorkflow(envName: String)
+    def startWorkflow(envId: Int, projectId: Int)
 
-    def destroyEnv(envName: String)
+    def destroyEnv(envId: Int, projectId: Int)
 
-    def cancelWorkflow(envName: String)
+    def cancelWorkflow(envId: Int, projectId: Int)
 }
 
 class RequestDispatcherImpl(beatPeriodMs: Long,
@@ -52,35 +52,35 @@ class RequestDispatcherImpl(beatPeriodMs: Long,
                             stepCoordinatorFactory: StepCoordinatorFactory)
     extends TypedActor with RequestDispatcher with Logging {
 
-    val coordinators = mutable.Map[String, TypedFlowCoordinator]()
+    val coordinators = mutable.Map[(Int, Int), TypedFlowCoordinator]()
 
-    def createEnv(envName: String) {
-        startWorkflow(envName)
+    def createEnv(envId: Int, projectId: Int) {
+        startWorkflow(envId, projectId)
     }
 
-    def destroyEnv(envName: String) {
-        startWorkflow(envName)
+    def destroyEnv(envId: Int, projectId: Int) {
+        startWorkflow(envId, projectId)
     }
 
-    def startWorkflow(envName: String) {
-      val (env, workflow) = storeService.retrieveWorkflow(envName)
+    def startWorkflow(envId: Int, projectId: Int) {
+      val (env, workflow) = storeService.retrieveWorkflow(envId, projectId)
 
       try{
         val definition = templateService.findTemplate(env.projectId, env.templateName, env.templateVersion)
         val rawSteps = definition.flatMap(_.getWorkflow(workflow.name)
-            .map(_.embody(workflow.variables, Option(env.name))))
+            .map(_.embody(workflow.variables, Option(env.id), Option(env.projectId))))
 
         rawSteps.map(sortByPhase).map(applyIds(_)).foreach(s => {
-            coordinators(env.name) = if (Option(workflow.name) == definition.map(_.destroyWorkflow.name))
-                destroyingCoordinator(envName, s)
-            else regularCoordinator(envName, s)
+            coordinators((env.id, env.projectId)) = if (Option(workflow.name) == definition.map(_.destroyWorkflow.name))
+                destroyingCoordinator(env.id, projectId, s)
+            else regularCoordinator(env.id, projectId, s)
 
-            coordinators(env.name).start
+            coordinators((env.id, env.projectId)).start
         })
       } catch {
         case e => {
-          log.error(e, "Failed to workflow [%s] for env [%s]".format(workflow.name, envName))
-          env.status = EnvStatus.Failed(workflow.name)
+          log.error(e, "Failed to start workflow [%s] for env [%d]".format(workflow.name, envId))
+          env.status = EnvStatus.Broken
           workflow.status = Failed
           storeService.finishWorkflow(env, workflow)
         }
@@ -105,12 +105,12 @@ class RequestDispatcherImpl(beatPeriodMs: Long,
       sorted.toSeq
     }
 
-    def cancelWorkflow(envName: String) {
-        for (coordinator <- coordinators.get(envName))
+    def cancelWorkflow(envId: Int, projectId: Int) {
+        for (coordinator <- coordinators.get((envId, projectId)))
             coordinator.signal(Cancel())
 
         // TODO collect all coordinator's garbage
-        coordinators -= envName
+        coordinators -= Tuple2(envId, projectId)
     }
 
     def applyIds(builders: Seq[StepBuilder]): Seq[StepBuilder] = {
@@ -122,16 +122,16 @@ class RequestDispatcherImpl(beatPeriodMs: Long,
         }
     }
 
-    def regularCoordinator(envName: String, flowSteps: Seq[StepBuilder]) =
+    def regularCoordinator(envId: Int, projectId: Int, flowSteps: Seq[StepBuilder]) =
         new TypedFlowCoordinatorImpl(
-            new GenesisFlowCoordinator(envName, flowSteps, storeService,
+            new GenesisFlowCoordinator(envId, projectId, flowSteps, storeService,
                 stepCoordinatorFactory) with RegularWorkflow,
             beatPeriodMs, flowTimeOutMs, executorService
         )
 
-    def destroyingCoordinator(envName: String, flowSteps: Seq[StepBuilder]) =
+    def destroyingCoordinator(envId: Int, projectId: Int, flowSteps: Seq[StepBuilder]) =
         new TypedFlowCoordinatorImpl(
-            new GenesisFlowCoordinator(envName, flowSteps, storeService,
+            new GenesisFlowCoordinator(envId, projectId, flowSteps, storeService,
                 stepCoordinatorFactory) with DestroyWorkflow,
             beatPeriodMs, flowTimeOutMs, executorService
         )
